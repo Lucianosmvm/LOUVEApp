@@ -670,31 +670,20 @@ html, body {
       <div id="perf-info"></div>
     </div>
     <div class="perf-controls">
-      <!-- Tom -->
+      <!-- Fonte -->
       <div class="tb-group">
-        <button class="btn" onclick="transposeKey(-1);syncPerf()">−½</button>
-        <span class="tb-val" id="perf-key-display">—</span>
-        <button class="btn" onclick="transposeKey(+1);syncPerf()">+½</button>
-      </div>
-      <!-- Capo -->
-      <div class="tb-group">
-        <span class="tb-label" style="font-size:0.6rem;color:var(--text-muted)">Capo</span>
-        <button class="btn" onclick="changeCapo(-1);syncPerf()">−</button>
-        <span class="tb-val small" id="perf-capo-display">0</span>
-        <button class="btn" onclick="changeCapo(+1);syncPerf()">+</button>
+        <span class="tb-label" style="font-size:0.6rem;color:var(--text-muted)">Fonte</span>
+        <button class="btn" onclick="changeFontSize(-1)">A−</button>
+        <button class="btn" onclick="changeFontSize(+1)">A+</button>
       </div>
       <!-- Velocidade -->
       <div class="tb-group">
+        <span class="tb-label" style="font-size:0.6rem;color:var(--text-muted)">Vel.</span>
         <button class="btn" onclick="changeScrollSpeed(-1)">−</button>
         <span class="tb-val small" id="perf-speed-display">5</span>
         <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
       </div>
-      <!-- Fonte -->
-      <div class="tb-group">
-        <button class="btn" onclick="changeFontSize(-1)">A−</button>
-        <button class="btn" onclick="changeFontSize(+1)">A+</button>
-      </div>
-      <button class="btn" onclick="exitPerformanceMode()" style="border-color:var(--red);color:var(--red)">✕ Sair</button>
+      <button class="btn" onclick="exitPerformanceMode()" style="border-color:var(--red);color:var(--red);font-weight:700">✕ Sair</button>
     </div>
   </div>
 
@@ -787,7 +776,7 @@ let activeIdx = -1;
 let transposeOffset = 0;
 let capoOverride = -1;
 let fontSize = 14;
-let scrollSpeed = 5;
+let scrollSpeed = 5; // can be 0.5, 1, 1.5 ... 10
 let editingIdx = -1;
 let dragSrcIdx = -1;
 
@@ -1019,16 +1008,19 @@ function changeFontSize(d) {
     document.getElementById('perf-chord-content').style.fontSize = fontSize+'px';
 }
 function changeScrollSpeed(d) {
-  scrollSpeed = Math.max(1, Math.min(10, scrollSpeed+d));
-  document.getElementById('scroll-speed-display').textContent = scrollSpeed;
-  document.getElementById('perf-speed-display').textContent = scrollSpeed;
+  // Step by 0.5, min 0.5, max 10
+  scrollSpeed = Math.round((Math.max(0.5, Math.min(10, scrollSpeed + (d * 0.5)))) * 10) / 10;
+  const label = scrollSpeed % 1 === 0 ? scrollSpeed : scrollSpeed.toFixed(1);
+  document.getElementById('scroll-speed-display').textContent = label;
+  const ps = document.getElementById('perf-speed-display');
+  if (ps) ps.textContent = label;
 }
 
 // ══════════════════════════════════
 // AUTO SCROLL — rAF based (smooth!)
 // ══════════════════════════════════
 // px per second at speed 1 = 20px/s, speed 10 = 110px/s
-function speedToPxPerSec(s) { return 20 + (s-1) * 10; }
+function speedToPxPerSec(s) { return 6 + (s - 0.5) * 10; }
 
 let lastTimestamp = null;
 
