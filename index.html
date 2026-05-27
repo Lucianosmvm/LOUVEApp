@@ -68,17 +68,30 @@ html, body {
 }
 #app-header h1 .plus { color: #ffe599; }
 #app-header h1 span { color: rgba(255,255,255,0.65); font-weight: 300; font-size: 0.78rem; font-family: 'DM Sans', sans-serif; margin-left: 0.4rem; letter-spacing: 0; }
-.header-btns { display: flex; gap: 0.4rem; }
+.header-btns { display: flex; gap: 0.5rem; }
 .header-btns .btn {
   background: rgba(255,255,255,0.18);
   border-color: rgba(255,255,255,0.35);
   color: #fff;
   box-shadow: none;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  padding: 0.38rem 0.75rem;
+  border-radius: 7px;
+  letter-spacing: 0.01em;
 }
 .header-btns .btn:hover {
   background: rgba(255,255,255,0.3);
   border-color: rgba(255,255,255,0.6);
   color: #fff;
+}
+.header-btns .btn .btn-icon-sym {
+  font-size: 0.9rem;
+  line-height: 1;
 }
 
 /* ══════════════════════════════════
@@ -545,8 +558,12 @@ html, body {
   <header id="app-header">
     <h1>✦ Louva<span class="plus">+</span> <span id="song-count"></span></h1>
     <div class="header-btns">
-      <button class="btn" onclick="exportPlaylist()" title="Exportar">⬇</button>
-      <button class="btn" onclick="importPlaylist()" title="Importar">⬆</button>
+      <button class="btn" onclick="exportPlaylist()" title="Exportar playlist">
+        <span class="btn-icon-sym">⬇</span> Exportar
+      </button>
+      <button class="btn" onclick="importPlaylist()" title="Importar playlist">
+        <span class="btn-icon-sym">⬆</span> Importar
+      </button>
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
     </div>
   </header>
