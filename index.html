@@ -1,0 +1,1404 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Louva+ · Cifras para Culto</title>
+<meta name="description" content="Playlist de cifras para culto com scroll automático">
+<meta name="theme-color" content="#b5813a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Louva+">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=DM+Sans:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #faf7f2;
+  --surface: #ffffff;
+  --surface2: #f4efe6;
+  --border: #e6ddd0;
+  --border-soft: #ede8df;
+  --accent: #b5813a;
+  --accent-light: #f0e2c8;
+  --accent-deep: #8a5e22;
+  --text: #2c2416;
+  --text-muted: #9a8a76;
+  --chord: #7a4e1e;
+  --section: #5c7a9e;
+  --green: #4a9068;
+  --red: #c0524a;
+  --gold: #c89a3a;
+  --warm-shadow: 0 1px 4px rgba(100,70,20,0.08), 0 4px 16px rgba(100,70,20,0.06);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ══════════════════════════════════
+   HEADER
+══════════════════════════════════ */
+#app-header {
+  background: linear-gradient(135deg, #7a4e1e 0%, #b5813a 60%, #c89a3a 100%);
+  height: 54px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.1rem;
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  box-shadow: 0 2px 12px rgba(100,60,10,0.18);
+}
+#app-header h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+#app-header h1 .plus { color: #ffe599; }
+#app-header h1 span { color: rgba(255,255,255,0.65); font-weight: 300; font-size: 0.78rem; font-family: 'DM Sans', sans-serif; margin-left: 0.4rem; letter-spacing: 0; }
+.header-btns { display: flex; gap: 0.4rem; }
+.header-btns .btn {
+  background: rgba(255,255,255,0.18);
+  border-color: rgba(255,255,255,0.35);
+  color: #fff;
+  box-shadow: none;
+}
+.header-btns .btn:hover {
+  background: rgba(255,255,255,0.3);
+  border-color: rgba(255,255,255,0.6);
+  color: #fff;
+}
+
+/* ══════════════════════════════════
+   ROOT LAYOUT
+══════════════════════════════════ */
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+#root::before {
+  content: '';
+  display: block;
+  height: 3px;
+  background: linear-gradient(90deg, #7a4e1e, #c89a3a, #ffe599, #c89a3a, #7a4e1e);
+  flex-shrink: 0;
+}
+
+#main-area {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* ══════════════════════════════════
+   SIDEBAR (desktop)
+══════════════════════════════════ */
+#sidebar {
+  width: 290px;
+  min-width: 290px;
+  background: var(--surface);
+  border-right: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 2px 0 8px rgba(100,70,20,0.04);
+}
+.sidebar-top {
+  padding: 0.9rem 1rem 0.7rem;
+  border-bottom: 1px solid var(--border-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  background: var(--surface2);
+}
+.sidebar-top-row { display: flex; align-items: center; justify-content: space-between; }
+.sidebar-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+#song-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.4rem 0;
+}
+#song-list::-webkit-scrollbar { width: 3px; }
+#song-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ══════════════════════════════════
+   SONG ITEMS
+══════════════════════════════════ */
+.song-item {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  border-left: 3px solid transparent;
+  transition: background 0.12s;
+  user-select: none;
+  border-bottom: 1px solid var(--border-soft);
+}
+.song-item:last-child { border-bottom: none; }
+.song-item:hover { background: #fdf8f0; }
+.song-item.active { background: var(--accent-light); border-left-color: var(--accent); }
+.song-num { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-muted); width: 16px; text-align: right; flex-shrink: 0; }
+.song-info { flex: 1; overflow: hidden; }
+.song-title { font-size: 0.87rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+.song-artist { font-size: 0.71rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.song-key-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--accent-deep); background: var(--accent-light); padding: 2px 6px; border-radius: 10px; flex-shrink: 0; font-weight: 500; border: 1px solid rgba(181,129,58,0.25); }
+.song-drag { color: var(--border); font-size: 0.75rem; cursor: grab; flex-shrink: 0; opacity: 0.5; }
+.song-item:hover .song-drag { opacity: 1; }
+.song-del { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.85rem; padding: 2px 4px; border-radius: 3px; opacity: 0; transition: opacity 0.12s; flex-shrink: 0; }
+.song-item:hover .song-del { opacity: 1; }
+.song-del:hover { color: var(--red); }
+
+/* ══════════════════════════════════
+   MAIN PANEL
+══════════════════════════════════ */
+#main-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+/* ══════════════════════════════════
+   TOOLBAR
+══════════════════════════════════ */
+#toolbar {
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0.5rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+.tb-group { display: flex; align-items: center; gap: 0.4rem; }
+.tb-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-muted); font-weight: 500; }
+.tb-val { font-family: 'JetBrains Mono', monospace; font-size: 0.95rem; font-weight: 500; color: var(--accent); min-width: 2.2rem; text-align: center; }
+.tb-val.small { font-size: 0.75rem; color: var(--text-muted); }
+.tb-sep { width: 1px; height: 18px; background: var(--border); flex-shrink: 0; }
+
+/* ══════════════════════════════════
+   BUTTONS
+══════════════════════════════════ */
+.btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.32rem 0.6rem;
+  cursor: pointer;
+  font-size: 0.77rem;
+  font-family: 'JetBrains Mono', monospace;
+  transition: all 0.12s;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(100,70,20,0.06);
+}
+.btn:hover { background: var(--accent-light); border-color: var(--accent); color: var(--accent-deep); }
+.btn:active { transform: scale(0.96); }
+
+.btn-primary {
+  background: linear-gradient(135deg, #b5813a, #c89a3a);
+  border-color: #b5813a;
+  color: #fff;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  box-shadow: 0 2px 8px rgba(181,129,58,0.28);
+}
+.btn-primary:hover { background: linear-gradient(135deg, #c89a3a, #d4a840); border-color: #c89a3a; color: #fff; }
+
+.btn-play {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.32rem 0.85rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  transition: all 0.12s;
+  box-shadow: 0 1px 2px rgba(100,70,20,0.06);
+}
+.btn-play:hover { border-color: var(--green); color: var(--green); background: #f0faf4; }
+.btn-play.active { background: var(--green); border-color: var(--green); color: #fff; box-shadow: 0 2px 8px rgba(74,144,104,0.3); }
+
+/* ══════════════════════════════════
+   CHORD SHEET
+══════════════════════════════════ */
+#sheet-wrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.75rem 2.25rem 4rem;
+  min-height: 0;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
+  background: var(--bg);
+}
+#sheet-wrap::-webkit-scrollbar { width: 5px; }
+#sheet-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.sheet-song-header {
+  margin-bottom: 1.75rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 2px solid var(--accent-light);
+  position: relative;
+}
+.sheet-song-header::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 48px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 1px;
+}
+.sheet-song-header h2 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+  color: var(--text);
+  letter-spacing: 0.01em;
+}
+.sheet-meta { font-size: 0.78rem; color: var(--text-muted); display: flex; gap: 1.2rem; flex-wrap: wrap; }
+.sheet-meta strong { color: var(--accent); font-weight: 600; }
+
+.chord-content {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  line-height: 1.95;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.cl { display: block; }
+.cl-section {
+  color: var(--section);
+  font-weight: 600;
+  margin-top: 1.4em;
+  margin-bottom: 0.3em;
+  font-size: 0.78em;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-family: 'DM Sans', sans-serif;
+}
+.cl-chord { color: var(--chord); font-weight: 600; }
+.cl-lyric { color: var(--text); }
+.cl-empty { display: block; height: 0.4em; }
+
+/* ══════════════════════════════════
+   EMPTY STATE
+══════════════════════════════════ */
+#empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  gap: 0.75rem;
+  padding: 2rem;
+  text-align: center;
+}
+#empty-state .ei { font-size: 2.5rem; opacity: 0.25; }
+#empty-state h3 { font-family: 'Playfair Display', serif; font-size: 1.1rem; }
+#empty-state p { font-size: 0.82rem; max-width: 260px; line-height: 1.6; }
+
+/* ══════════════════════════════════
+   PERFORMANCE MODE (fullscreen scroll)
+══════════════════════════════════ */
+#perf-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #faf7f2;
+  z-index: 500;
+  flex-direction: column;
+}
+#perf-overlay.active { display: flex; }
+
+#perf-header {
+  background: rgba(250,247,242,0.97);
+  border-bottom: 1px solid var(--border-soft);
+  box-shadow: 0 2px 12px rgba(100,70,20,0.08);
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  transition: opacity 0.3s, transform 0.3s;
+}
+#perf-header.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-100%);
+}
+#perf-title { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; font-weight: 700; color: var(--accent-deep); }
+#perf-info { font-size: 0.73rem; color: var(--text-muted); margin-top: 1px; }
+.perf-controls { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+
+#perf-sheet-wrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.5rem 1.5rem 6rem;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: auto;
+  background: #faf7f2;
+}
+#perf-sheet-wrap::-webkit-scrollbar { width: 3px; }
+#perf-sheet-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* FAB pause button */
+#perf-fab {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.25rem;
+  z-index: 510;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #b5813a, #c89a3a);
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  box-shadow: 0 4px 20px rgba(181,129,58,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s, background 0.15s;
+}
+#perf-fab:active { transform: scale(0.92); }
+#perf-fab.paused { background: linear-gradient(135deg, #4a9068, #5ca87a); box-shadow: 0 4px 20px rgba(74,144,104,0.4); }
+
+/* ══════════════════════════════════
+   MOBILE TABS
+══════════════════════════════════ */
+#mobile-tabs {
+  display: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border-soft);
+  flex-shrink: 0;
+}
+.tab-bar {
+  display: flex;
+}
+.tab-btn {
+  flex: 1;
+  padding: 0.75rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  letter-spacing: 0.02em;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ══════════════════════════════════
+   MODAL
+══════════════════════════════════ */
+#modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 300;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
+#modal-overlay.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -8px 40px rgba(100,70,20,0.1);
+  width: 100%;
+  max-width: 600px;
+  max-height: 92dvh;
+  display: flex;
+  flex-direction: column;
+  transform: translateY(30px);
+  transition: transform 0.25s;
+}
+#modal-overlay.open .modal { transform: translateY(0); }
+
+.modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
+.modal-header { padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; justify-content: space-between; }
+.modal-header h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; font-weight: 700; color: var(--text); }
+.modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; }
+.modal-body { padding: 1rem 1.25rem; overflow-y: auto; display: flex; flex-direction: column; gap: 0.85rem; -webkit-overflow-scrolling: touch; }
+.modal-footer { padding: 0.85rem 1.25rem; border-top: 1px solid var(--border-soft); display: flex; justify-content: flex-end; gap: 0.6rem; padding-bottom: max(0.85rem, env(safe-area-inset-bottom)); }
+
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+.form-group { display: flex; flex-direction: column; gap: 0.35rem; }
+.form-group label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 0.5rem 0.7rem;
+  font-family: 'Lato', sans-serif;
+  font-size: 0.875rem;
+  transition: border-color 0.15s;
+  -webkit-appearance: none;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(181,129,58,0.12); }
+.form-group select option { background: #fff; color: var(--text); }
+.form-group textarea { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; resize: vertical; min-height: 200px; line-height: 1.6; }
+.form-hint { font-size: 0.7rem; color: var(--text-muted); line-height: 1.5; }
+
+/* ══════════════════════════════════
+   DRAG
+══════════════════════════════════ */
+.song-item.drag-over { background: var(--accent-light); border-left-color: var(--accent); }
+.song-item.dragging { opacity: 0.35; }
+
+/* ══════════════════════════════════
+   RESPONSIVE: MOBILE
+══════════════════════════════════ */
+@media (max-width: 680px) {
+  #sidebar { display: none; }
+  #mobile-tabs { display: block; }
+  #toolbar { gap: 0.6rem; padding: 0.5rem 0.75rem; }
+  .tb-label { display: none; }
+  #sheet-wrap { padding: 1rem 0.85rem 5rem; }
+
+  /* Tab views */
+  body.tab-setlist #main-panel { display: none; }
+  body.tab-setlist #sidebar-mobile { display: flex; }
+  body.tab-cifra #sidebar-mobile { display: none; }
+
+  #sidebar-mobile {
+    display: none;
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .sidebar-top-mobile {
+    padding: 0.75rem;
+    border-bottom: 1px solid var(--border-soft);
+    background: var(--surface2);
+  }
+  #song-list-mobile {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.3rem 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .form-row { grid-template-columns: 1fr; }
+  .sheet-song-header h2 { font-size: 1.25rem; }
+}
+
+@media (min-width: 681px) {
+  #sidebar-mobile { display: none !important; }
+  #mobile-tabs { display: none !important; }
+  body.tab-setlist #main-panel,
+  body.tab-cifra #main-panel { display: flex !important; }
+}
+</style>
+</head>
+<body class="tab-cifra">
+
+<div id="root">
+  <!-- HEADER -->
+  <header id="app-header">
+    <h1>✦ Louva<span class="plus">+</span> <span id="song-count"></span></h1>
+    <div class="header-btns">
+      <button class="btn" onclick="exportPlaylist()" title="Exportar">⬇</button>
+      <button class="btn" onclick="importPlaylist()" title="Importar">⬆</button>
+      <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
+    </div>
+  </header>
+
+  <!-- MOBILE TABS -->
+  <div id="mobile-tabs">
+    <div class="tab-bar">
+      <button class="tab-btn" id="tab-setlist-btn" onclick="switchTab('setlist')">🎵 Setlist</button>
+      <button class="tab-btn active" id="tab-cifra-btn" onclick="switchTab('cifra')">🎼 Cifra</button>
+    </div>
+  </div>
+
+  <div id="main-area">
+    <!-- SIDEBAR (desktop) -->
+    <aside id="sidebar">
+      <div class="sidebar-top">
+        <div class="sidebar-top-row">
+          <span class="sidebar-label">🎵 Setlist</span>
+        </div>
+        <button class="btn btn-primary" onclick="openModal()" style="width:100%;padding:0.55rem">+ Adicionar Cifra</button>
+      </div>
+      <div id="song-list"></div>
+    </aside>
+
+    <!-- SIDEBAR MOBILE -->
+    <div id="sidebar-mobile">
+      <div class="sidebar-top-mobile">
+        <button class="btn btn-primary" onclick="openModal()" style="width:100%;padding:0.6rem">+ Adicionar Cifra</button>
+      </div>
+      <div id="song-list-mobile"></div>
+    </div>
+
+    <!-- MAIN PANEL -->
+    <main id="main-panel">
+      <!-- TOOLBAR -->
+      <div id="toolbar">
+        <!-- Tom -->
+        <div class="tb-group">
+          <span class="tb-label">Tom</span>
+          <button class="btn" onclick="transposeKey(-1)">−½</button>
+          <span class="tb-val" id="key-display">—</span>
+          <button class="btn" onclick="transposeKey(+1)">+½</button>
+        </div>
+        <div class="tb-sep"></div>
+        <!-- Capo -->
+        <div class="tb-group">
+          <span class="tb-label">Capo</span>
+          <button class="btn" onclick="changeCapo(-1)">−</button>
+          <span class="tb-val" id="capo-display">0</span>
+          <button class="btn" onclick="changeCapo(+1)">+</button>
+        </div>
+        <div class="tb-sep"></div>
+        <!-- Fonte -->
+        <div class="tb-group">
+          <span class="tb-label">Fonte</span>
+          <button class="btn" onclick="changeFontSize(-1)">A−</button>
+          <span class="tb-val small" id="font-size-display">14</span>
+          <button class="btn" onclick="changeFontSize(+1)">A+</button>
+        </div>
+        <div class="tb-sep"></div>
+        <!-- Scroll -->
+        <div class="tb-group">
+          <span class="tb-label">Vel.</span>
+          <button class="btn" onclick="changeScrollSpeed(-1)">−</button>
+          <span class="tb-val small" id="scroll-speed-display">5</span>
+          <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
+        </div>
+        <div class="tb-group" style="margin-left:auto; gap:0.4rem">
+          <button class="btn" onclick="resetAll()" title="Resetar tom e capo">↺</button>
+          <button class="btn btn-play" id="scroll-btn" onclick="enterPerformanceMode()">▶ Play</button>
+        </div>
+      </div>
+
+      <!-- SHEET -->
+      <div id="sheet-wrap">
+        <div id="empty-state">
+          <div class="ei">🕊</div>
+          <h3>Nenhuma música selecionada</h3>
+          <p>Selecione uma música no setlist para ver a cifra aqui.</p>
+        </div>
+        <div id="chord-display" style="display:none">
+          <div class="sheet-song-header">
+            <h2 id="display-title"></h2>
+            <div class="sheet-meta">
+              <span><strong id="display-artist"></strong></span>
+              <span>Tom: <strong id="display-cur-key"></strong></span>
+              <span id="display-capo-span" style="display:none">Capo: <strong id="display-capo"></strong>ª casa</span>
+            </div>
+          </div>
+          <div class="chord-content" id="chord-content"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     PERFORMANCE OVERLAY (fullscreen)
+══════════════════════════════════ -->
+<div id="perf-overlay">
+  <div id="perf-header">
+    <div>
+      <div id="perf-title"></div>
+      <div id="perf-info"></div>
+    </div>
+    <div class="perf-controls">
+      <!-- Tom -->
+      <div class="tb-group">
+        <button class="btn" onclick="transposeKey(-1);syncPerf()">−½</button>
+        <span class="tb-val" id="perf-key-display">—</span>
+        <button class="btn" onclick="transposeKey(+1);syncPerf()">+½</button>
+      </div>
+      <!-- Capo -->
+      <div class="tb-group">
+        <span class="tb-label" style="font-size:0.6rem;color:var(--text-muted)">Capo</span>
+        <button class="btn" onclick="changeCapo(-1);syncPerf()">−</button>
+        <span class="tb-val small" id="perf-capo-display">0</span>
+        <button class="btn" onclick="changeCapo(+1);syncPerf()">+</button>
+      </div>
+      <!-- Velocidade -->
+      <div class="tb-group">
+        <button class="btn" onclick="changeScrollSpeed(-1)">−</button>
+        <span class="tb-val small" id="perf-speed-display">5</span>
+        <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
+      </div>
+      <!-- Fonte -->
+      <div class="tb-group">
+        <button class="btn" onclick="changeFontSize(-1)">A−</button>
+        <button class="btn" onclick="changeFontSize(+1)">A+</button>
+      </div>
+      <button class="btn" onclick="exitPerformanceMode()" style="border-color:var(--red);color:var(--red)">✕ Sair</button>
+    </div>
+  </div>
+
+  <div id="perf-sheet-wrap">
+    <div class="chord-content" id="perf-chord-content"></div>
+  </div>
+
+  <!-- FAB: toque para pausar/continuar -->
+  <button id="perf-fab" onclick="togglePerfScroll()" title="Pausar/Continuar">⏸</button>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL
+══════════════════════════════════ -->
+<div id="modal-overlay">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3 id="modal-title">Adicionar Cifra</h3>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Título *</label>
+          <input type="text" id="inp-title" placeholder="ex: Messias">
+        </div>
+        <div class="form-group">
+          <label>Artista</label>
+          <input type="text" id="inp-artist" placeholder="ex: Marcelo Markes">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tom Original</label>
+          <select id="inp-key">
+            <option>C</option><option>C#</option><option>Db</option><option>D</option>
+            <option>D#</option><option>Eb</option><option>E</option><option>F</option>
+            <option>F#</option><option>Gb</option><option>G</option><option>G#</option>
+            <option>Ab</option><option>A</option><option>A#</option><option>Bb</option>
+            <option selected>B</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Capotraste (casa)</label>
+          <input type="number" id="inp-capo" value="0" min="0" max="12">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Cifra</label>
+        <textarea id="inp-chords" placeholder="Cole a cifra aqui...
+
+[Intro] G  Em
+
+Em                    C
+   Eu ouço o som de muitas águas
+G           D
+Seu rosto brilha mais que o sol
+
+[Refrão]
+G
+Messias, estamos te esperando vem"></textarea>
+        <span class="form-hint">Cole o texto da cifra do Cifra Club. Linhas com acordes são coloridas automaticamente.</span>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveSong()" style="padding:0.5rem 1.25rem">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════
+// STATE
+// ══════════════════════════════════
+let songs = [];
+let activeIdx = -1;
+let transposeOffset = 0;
+let capoOverride = -1;
+let fontSize = 14;
+let scrollSpeed = 5;
+let editingIdx = -1;
+let dragSrcIdx = -1;
+
+// Scroll state — rAF based
+let scrolling = false;
+let scrollRAF = null;
+let scrollAccum = 0;   // sub-pixel accumulator
+let perfScrolling = false;
+let perfScrollRAF = null;
+let perfScrollAccum = 0;
+
+// ══════════════════════════════════
+// CHROMATIC
+// ══════════════════════════════════
+const NOTES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const ENARMON = {Db:'C#',Eb:'D#',Fb:'E',Gb:'F#',Ab:'G#',Bb:'A#',Cb:'B'};
+const TO_FLAT  = {'C#':'Db','D#':'Eb','F#':'Gb','G#':'Ab','A#':'Bb'};
+
+function normNote(n) { return ENARMON[n] || n; }
+
+function transposeNote(note, semi) {
+  const idx = NOTES.indexOf(normNote(note));
+  if (idx === -1) return note;
+  const ni = ((idx + semi) % 12 + 12) % 12;
+  const out = NOTES[ni];
+  if (note.includes('b') && TO_FLAT[out]) return TO_FLAT[out];
+  return out;
+}
+
+function transposeChordToken(tok, semi) {
+  if (semi === 0) return tok;
+  const m = tok.match(/^([A-G][#b]?)(.*)/);
+  if (!m) return tok;
+  const root = m[1], rest = m[2];
+  // Slash chord bass note
+  const si = rest.lastIndexOf('/');
+  if (si !== -1) {
+    const pre = rest.slice(0, si);
+    const bass = rest.slice(si + 1);
+    const transRoot = transposeNote(root, semi) + pre;
+    const transBass = transposeNote(bass, semi);
+    return transRoot + '/' + transBass;
+  }
+  return transposeNote(root, semi) + rest;
+}
+
+const CHORD_RE = /\b([A-G][#b]?(m{1,2}|maj\d*|min|dim|aug|sus\d*|add\d*|M)?\d*(\/[A-G][#b]?)?)\b/g;
+
+function getTotalSemitones() {
+  const capoOriginal = activeIdx >= 0 ? (parseInt(songs[activeIdx].capo) || 0) : 0;
+  const capoAtual = getEffectiveCapo();
+  return transposeOffset + (capoAtual - capoOriginal);
+}
+
+function transposeLine(line) {
+  const semi = getTotalSemitones();
+  if (semi === 0) return line;
+  return line.replace(CHORD_RE, t => transposeChordToken(t, semi));
+}
+
+function isChordLine(line) {
+  const t = line.trim();
+  if (!t || /^\[/.test(t)) return false;
+  const tokens = t.split(/\s+/);
+  const chords = tokens.filter(tk => /^[A-G][#b]?(m{1,2}|maj\d*|min|dim|aug|sus\d*|add\d*|M)?\d*(\/[A-G][#b]?)?$/.test(tk));
+  return chords.length > 0 && chords.length / tokens.length > 0.4;
+}
+
+// ══════════════════════════════════
+// RENDER CHORD CONTENT
+// ══════════════════════════════════
+function buildChordHTML(source) {
+  const lines = source.split('\n');
+  return lines.map(raw => {
+    if (!raw.trim()) return '<span class="cl cl-empty"></span>';
+    if (/^\s*\[/.test(raw)) return `<span class="cl cl-section">${esc(raw)}</span>`;
+    if (isChordLine(raw)) return `<span class="cl cl-chord">${esc(transposeLine(raw))}</span>`;
+    return `<span class="cl cl-lyric">${esc(raw)}</span>`;
+  }).join('');
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ══════════════════════════════════
+// CURRENT KEY / CAPO
+// ══════════════════════════════════
+function getCurrentKey() {
+  if (activeIdx === -1) return '—';
+  return transposeNote(songs[activeIdx].key, getTotalSemitones());
+}
+function getEffectiveCapo() {
+  if (activeIdx === -1) return 0;
+  return capoOverride >= 0 ? capoOverride : (parseInt(songs[activeIdx].capo) || 0);
+}
+
+// ══════════════════════════════════
+// RENDER SHEET (main panel)
+// ══════════════════════════════════
+function renderSheet() {
+  const curKey = getCurrentKey();
+  const capo = getEffectiveCapo();
+
+  document.getElementById('key-display').textContent = curKey;
+  document.getElementById('capo-display').textContent = capo;
+  document.getElementById('font-size-display').textContent = fontSize;
+
+  if (activeIdx === -1) {
+    document.getElementById('empty-state').style.display = '';
+    document.getElementById('chord-display').style.display = 'none';
+    return;
+  }
+
+  const song = songs[activeIdx];
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('chord-display').style.display = '';
+
+  document.getElementById('display-title').textContent = song.title;
+  document.getElementById('display-artist').textContent = song.artist || '';
+  document.getElementById('display-cur-key').textContent = curKey;
+  if (capo > 0) {
+    document.getElementById('display-capo-span').style.display = '';
+    document.getElementById('display-capo').textContent = capo;
+  } else {
+    document.getElementById('display-capo-span').style.display = 'none';
+  }
+
+  const cc = document.getElementById('chord-content');
+  cc.innerHTML = buildChordHTML(song.chords || '');
+  cc.style.fontSize = fontSize + 'px';
+}
+
+// ══════════════════════════════════
+// SONG LIST
+// ══════════════════════════════════
+function renderSongList() {
+  const count = songs.length;
+  document.getElementById('song-count').textContent = count ? `(${count})` : '';
+
+  ['song-list', 'song-list-mobile'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (!count) {
+      el.innerHTML = '<div style="padding:1.25rem 1rem;color:var(--text-muted);font-size:0.8rem;text-align:center;line-height:1.6">Nenhuma música.<br>Clique em "+ Adicionar Cifra"</div>';
+      return;
+    }
+    el.innerHTML = '';
+    songs.forEach((song, i) => {
+      const div = document.createElement('div');
+      div.className = 'song-item' + (i === activeIdx ? ' active' : '');
+      div.draggable = true;
+      div.dataset.index = i;
+      div.innerHTML = `
+        <span class="song-drag">⠿</span>
+        <span class="song-num">${i+1}</span>
+        <div class="song-info">
+          <div class="song-title">${esc(song.title)}</div>
+          <div class="song-artist">${esc(song.artist||'')}</div>
+        </div>
+        <span class="song-key-badge">${esc(song.key)}</span>
+        <button class="song-del" onclick="deleteSong(event,${i})">✕</button>
+      `;
+      div.addEventListener('click', () => selectSong(i));
+      div.addEventListener('dblclick', () => openModal(i));
+      div.addEventListener('dragstart', () => { dragSrcIdx = i; div.classList.add('dragging'); });
+      div.addEventListener('dragend', () => { div.classList.remove('dragging'); el.querySelectorAll('.song-item').forEach(x=>x.classList.remove('drag-over')); });
+      div.addEventListener('dragover', e => { e.preventDefault(); div.classList.add('drag-over'); });
+      div.addEventListener('dragleave', () => div.classList.remove('drag-over'));
+      div.addEventListener('drop', e => {
+        e.preventDefault();
+        if (dragSrcIdx !== i) {
+          const moved = songs.splice(dragSrcIdx, 1)[0];
+          songs.splice(i, 0, moved);
+          if (activeIdx === dragSrcIdx) activeIdx = i;
+          else if (activeIdx > dragSrcIdx && activeIdx <= i) activeIdx--;
+          else if (activeIdx < dragSrcIdx && activeIdx >= i) activeIdx++;
+          save(); renderSongList(); renderSheet();
+        }
+      });
+      el.appendChild(div);
+    });
+  });
+}
+
+// ══════════════════════════════════
+// SELECT / DELETE
+// ══════════════════════════════════
+function selectSong(i) {
+  if (activeIdx === i) { switchTab('cifra'); return; }
+  activeIdx = i;
+  transposeOffset = 0;
+  capoOverride = -1;
+  stopMainScroll();
+  renderSongList();
+  renderSheet();
+  document.getElementById('sheet-wrap').scrollTop = 0;
+  switchTab('cifra');
+}
+
+function deleteSong(e, i) {
+  e.stopPropagation();
+  if (!confirm(`Remover "${songs[i].title}"?`)) return;
+  songs.splice(i, 1);
+  if (activeIdx >= songs.length) activeIdx = songs.length - 1;
+  save(); renderSongList(); renderSheet();
+}
+
+// ══════════════════════════════════
+// CONTROLS
+// ══════════════════════════════════
+function transposeKey(d) { if (activeIdx===-1) return; transposeOffset+=d; renderSheet(); }
+function changeCapo(d) {
+  if (activeIdx===-1) return;
+  const cur = getEffectiveCapo();
+  capoOverride = Math.max(0, Math.min(12, cur+d));
+  renderSheet();
+}
+function resetAll() { transposeOffset=0; capoOverride=-1; renderSheet(); }
+function changeFontSize(d) {
+  fontSize = Math.max(10, Math.min(26, fontSize+d));
+  document.getElementById('font-size-display').textContent = fontSize;
+  document.getElementById('chord-content').style.fontSize = fontSize+'px';
+  if (document.getElementById('perf-overlay').classList.contains('active'))
+    document.getElementById('perf-chord-content').style.fontSize = fontSize+'px';
+}
+function changeScrollSpeed(d) {
+  scrollSpeed = Math.max(1, Math.min(10, scrollSpeed+d));
+  document.getElementById('scroll-speed-display').textContent = scrollSpeed;
+  document.getElementById('perf-speed-display').textContent = scrollSpeed;
+}
+
+// ══════════════════════════════════
+// AUTO SCROLL — rAF based (smooth!)
+// ══════════════════════════════════
+// px per second at speed 1 = 20px/s, speed 10 = 110px/s
+function speedToPxPerSec(s) { return 20 + (s-1) * 10; }
+
+let lastTimestamp = null;
+
+function mainScrollStep(ts) {
+  if (!scrolling) return;
+  if (lastTimestamp === null) lastTimestamp = ts;
+  const dt = Math.min(ts - lastTimestamp, 100); // cap at 100ms to handle tab switch
+  lastTimestamp = ts;
+  const wrap = document.getElementById('sheet-wrap');
+  scrollAccum += speedToPxPerSec(scrollSpeed) * dt / 1000;
+  const px = Math.floor(scrollAccum);
+  if (px >= 1) {
+    wrap.scrollTop += px;
+    scrollAccum -= px;
+  }
+  if (wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 2) {
+    stopMainScroll(); return;
+  }
+  scrollRAF = requestAnimationFrame(mainScrollStep);
+}
+
+function stopMainScroll() {
+  scrolling = false;
+  lastTimestamp = null;
+  scrollAccum = 0;
+  if (scrollRAF) { cancelAnimationFrame(scrollRAF); scrollRAF = null; }
+  const btn = document.getElementById('scroll-btn');
+  btn.textContent = '▶ Play';
+  btn.classList.remove('active');
+}
+
+// ══════════════════════════════════
+// PERFORMANCE MODE
+// ══════════════════════════════════
+function enterPerformanceMode() {
+  if (activeIdx === -1) return;
+  syncPerf();
+  const overlay = document.getElementById('perf-overlay');
+  overlay.classList.add('active');
+  document.getElementById('perf-sheet-wrap').scrollTop = 0;
+
+  // Start scrolling
+  perfScrolling = true;
+  perfScrollAccum = 0;
+  lastPerfTs = null;
+  document.getElementById('perf-fab').textContent = '⏸';
+  document.getElementById('perf-fab').classList.remove('paused');
+  perfScrollRAF = requestAnimationFrame(perfScrollStep);
+
+  // Try fullscreen on mobile
+  try { overlay.requestFullscreen && overlay.requestFullscreen(); } catch(e) {}
+}
+
+function syncPerf() {
+  if (activeIdx === -1) return;
+  const song = songs[activeIdx];
+  const curKey = getCurrentKey();
+  const capo = getEffectiveCapo();
+
+  document.getElementById('perf-title').textContent = song.title + (song.artist ? ` — ${song.artist}` : '');
+  document.getElementById('perf-info').textContent = `Tom: ${curKey}` + (capo > 0 ? `  Capo: ${capo}ª casa` : '');
+  document.getElementById('perf-key-display').textContent = curKey;
+  document.getElementById('perf-capo-display').textContent = capo;
+  document.getElementById('perf-speed-display').textContent = scrollSpeed;
+
+  const pc = document.getElementById('perf-chord-content');
+  pc.innerHTML = buildChordHTML(song.chords || '');
+  pc.style.fontSize = fontSize + 'px';
+}
+
+function exitPerformanceMode() {
+  stopPerfScroll();
+  document.getElementById('perf-overlay').classList.remove('active');
+  try { document.fullscreenElement && document.exitFullscreen(); } catch(e) {}
+}
+
+let lastPerfTs = null;
+
+function perfScrollStep(ts) {
+  if (!perfScrolling) return;
+  if (lastPerfTs === null) lastPerfTs = ts;
+  const dt = Math.min(ts - lastPerfTs, 100);
+  lastPerfTs = ts;
+  const wrap = document.getElementById('perf-sheet-wrap');
+  perfScrollAccum += speedToPxPerSec(scrollSpeed) * dt / 1000;
+  const px = Math.floor(perfScrollAccum);
+  if (px >= 1) { wrap.scrollTop += px; perfScrollAccum -= px; }
+  if (wrap.scrollTop + wrap.clientHeight >= wrap.scrollHeight - 2) {
+    stopPerfScroll(); return;
+  }
+  perfScrollRAF = requestAnimationFrame(perfScrollStep);
+}
+
+function stopPerfScroll() {
+  perfScrolling = false;
+  lastPerfTs = null;
+  perfScrollAccum = 0;
+  if (perfScrollRAF) { cancelAnimationFrame(perfScrollRAF); perfScrollRAF = null; }
+  const fab = document.getElementById('perf-fab');
+  fab.textContent = '▶';
+  fab.classList.add('paused');
+}
+
+function resumePerfScroll() {
+  perfScrolling = true;
+  lastPerfTs = null;
+  perfScrollAccum = 0;
+  document.getElementById('perf-fab').textContent = '⏸';
+  document.getElementById('perf-fab').classList.remove('paused');
+  perfScrollRAF = requestAnimationFrame(perfScrollStep);
+}
+
+function togglePerfScroll() {
+  if (perfScrolling) stopPerfScroll(); else resumePerfScroll();
+}
+
+// Tap outside controls to toggle header visibility
+let headerVisible = true;
+document.getElementById('perf-sheet-wrap').addEventListener('click', () => {
+  const h = document.getElementById('perf-header');
+  headerVisible = !headerVisible;
+  h.classList.toggle('hidden', !headerVisible);
+});
+
+// ══════════════════════════════════
+// MOBILE TABS
+// ══════════════════════════════════
+function switchTab(tab) {
+  document.body.className = 'tab-' + tab;
+  document.getElementById('tab-setlist-btn').classList.toggle('active', tab === 'setlist');
+  document.getElementById('tab-cifra-btn').classList.toggle('active', tab === 'cifra');
+}
+
+// ══════════════════════════════════
+// MODAL
+// ══════════════════════════════════
+function openModal(idx = -1) {
+  editingIdx = idx;
+  document.getElementById('modal-title').textContent = idx >= 0 ? 'Editar Cifra' : 'Adicionar Cifra';
+  if (idx >= 0) {
+    const s = songs[idx];
+    document.getElementById('inp-title').value = s.title;
+    document.getElementById('inp-artist').value = s.artist || '';
+    document.getElementById('inp-key').value = s.key;
+    document.getElementById('inp-capo').value = s.capo || 0;
+    document.getElementById('inp-chords').value = s.chords || '';
+  } else {
+    document.getElementById('inp-title').value = '';
+    document.getElementById('inp-artist').value = '';
+    document.getElementById('inp-key').value = 'B';
+    document.getElementById('inp-capo').value = '0';
+    document.getElementById('inp-chords').value = '';
+  }
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('inp-title').focus(), 150);
+}
+
+function closeModal() { document.getElementById('modal-overlay').classList.remove('open'); }
+
+function saveSong() {
+  const title = document.getElementById('inp-title').value.trim();
+  if (!title) { alert('Preencha o título.'); return; }
+  const song = {
+    title,
+    artist: document.getElementById('inp-artist').value.trim(),
+    key: document.getElementById('inp-key').value,
+    capo: parseInt(document.getElementById('inp-capo').value) || 0,
+    chords: document.getElementById('inp-chords').value
+  };
+  if (editingIdx >= 0) songs[editingIdx] = song;
+  else songs.push(song);
+  save(); closeModal(); renderSongList();
+  if (editingIdx < 0) selectSong(songs.length - 1);
+  else renderSheet();
+}
+
+// Close modal on backdrop click
+document.getElementById('modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+// ══════════════════════════════════
+// STORAGE
+// ══════════════════════════════════
+function save() { try { localStorage.setItem('worship-pl', JSON.stringify(songs)); } catch(e){} }
+function load() { try { const r = localStorage.getItem('worship-pl'); if (r) songs = JSON.parse(r); } catch(e){} }
+
+// ══════════════════════════════════
+// EXPORT / IMPORT
+// ══════════════════════════════════
+function exportPlaylist() {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(songs,null,2)],{type:'application/json'}));
+  a.download = 'playlist-culto.json'; a.click();
+}
+function importPlaylist() { document.getElementById('import-file').click(); }
+function handleImport(e) {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      if (Array.isArray(d) && confirm(`Importar ${d.length} músicas?`)) {
+        songs = d; activeIdx = -1; save(); renderSongList(); renderSheet();
+      }
+    } catch { alert('Arquivo inválido.'); }
+  };
+  r.readAsText(f); e.target.value = '';
+}
+
+// ══════════════════════════════════
+// KEYBOARD
+// ══════════════════════════════════
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+  if (e.key === 'ArrowDown' || e.key === 'j') { if (activeIdx < songs.length-1) selectSong(activeIdx+1); }
+  else if (e.key === 'ArrowUp' || e.key === 'k') { if (activeIdx > 0) selectSong(activeIdx-1); }
+  else if (e.key === ' ') { e.preventDefault(); if (document.getElementById('perf-overlay').classList.contains('active')) togglePerfScroll(); else enterPerformanceMode(); }
+  else if (e.key === '+' || e.key === '=') transposeKey(+1);
+  else if (e.key === '-') transposeKey(-1);
+  else if (e.key === 'Escape') { if (document.getElementById('perf-overlay').classList.contains('active')) exitPerformanceMode(); }
+});
+
+// ══════════════════════════════════
+// DEMO DATA
+// ══════════════════════════════════
+const DEMO = [
+  {
+    title: "Messias",
+    artist: "Marcelo Markes",
+    key: "B",
+    capo: 4,
+    chords: `[Intro] G  Em
+
+[Verso]
+Em                         C
+    Eu ouço o som de muitas águas
+Em                    C
+Tua voz inunda tudo ao meu redor
+Am         G/B      C
+Seu rosto brilha mais que o sol
+Am           G/B         C
+Seus olhos em chamas eu anseio ver
+
+Em                     C
+As minhas vestes limpas já estão
+Em                   C
+Atento estou para te ouvir chegar
+Am         G/B      C
+Seu rosto brilha mais que o sol
+Am           G/B      C
+Seus olhos em chamas eu anseio ver
+
+[Refrão]
+G
+Messias, estamos te esperando vem
+Em
+Messias
+                              Am  G/B   C
+Abram-se ó portais, para que entre o rei da Glória
+G
+Glória
+
+[Verso 2]
+Em                     C
+As minhas vestes limpas já estão
+Em                   C
+Atento estou para te ouvir chegar
+Am        G/B       C
+Seu rosto brilha mais que o sol
+Am            G/B      C
+Seus olhos em chamas eu anseio ver
+
+[Refrão]
+G
+Messias, estamos te esperando vem
+Em
+Messias
+                              Am  G/B  C
+Abram-se ó portais, para que entre o rei da Glória
+G
+Glória
+
+G
+Messias, estamos te esperando vem
+Em
+Messias
+                              Am  G/B  C
+Abram-se ó portais, para que entre o rei da Glória
+G
+Glória
+
+[Interlúdio] Em  C  Em  C
+
+[Ponte]
+C                 D
+Que venha o céus, te desejamos
+Em             Bm
+Somos seu povo, te esperamos
+
+C                    D
+Que venha o céus, te desejamos
+Em          Bm
+Somos seu povo, te esperamos
+
+C                    D
+Que venha o céus, te desejamos
+Em          Bm
+Somos seu povo, te esperamos
+
+C                    D
+Que venha o céus, te desejamos
+Em             D
+Somos seu povo, te esperamos
+
+[Refrão]
+G
+Messias, estamos te esperando vem
+Em
+Messias
+                              Am  G/B  C
+Abram-se ó portais, para que entre o rei da Glória
+G
+Glória
+
+G                             Am
+Messias, estamos te esperando vem
+Em
+Messias
+                              Am  G/B  C
+Abram-se ó portais, para que entre o rei da Glória
+G
+Glória
+
+[Ponte]
+C                 D
+Que venha o céus, te desejamos
+Em           Bm
+Somos seu povo, te esperamos
+
+C                D
+Que venha o céus, te desejamos
+Em           Bm
+Somos seu povo, te esperamos
+
+[Final]
+G                             Am
+Messias, estamos te esperando vem
+Em
+Messias
+                              Am  G/B  C
+Abram-se ó portais, para que entre o rei da Glória
+G
+Glória`
+  },
+  {
+    title: "Exemplo: Como Adicionar",
+    artist: "Seu Artista",
+    key: "G",
+    capo: 2,
+    chords: `[Intro] G  D  Em  C
+
+[Verso]
+G              D
+Aqui está um exemplo
+Em             C
+De como inserir uma cifra
+G              D
+Cole o texto diretamente
+Em             C
+Do Cifra Club aqui
+
+[Refrão]
+G         D
+Aleluia, aleluia
+Em        C
+Toda glória a Deus
+G         D
+Aleluia, aleluia
+C         G
+Em nossas vidas
+
+[Final] G  D  C  G`
+  }
+];
+
+// ══════════════════════════════════
+// INIT
+// ══════════════════════════════════
+load();
+if (!songs.length) songs = DEMO;
+renderSongList();
+renderSheet();
+</script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js')
+      .then(() => console.log('Louva+ offline pronto ✓'))
+      .catch(e => console.warn('SW erro:', e));
+  });
+}
+</script>
+</body>
+</html>
