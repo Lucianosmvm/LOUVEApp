@@ -714,11 +714,22 @@ html, body {
         <div class="form-group">
           <label>Tom Original</label>
           <select id="inp-key">
-            <option>C</option><option>C#</option><option>Db</option><option>D</option>
-            <option>D#</option><option>Eb</option><option>E</option><option>F</option>
-            <option>F#</option><option>Gb</option><option>G</option><option>G#</option>
-            <option>Ab</option><option>A</option><option>A#</option><option>Bb</option>
-            <option selected>B</option>
+            <optgroup label="Maiores">
+              <option>C</option><option>C#</option><option>Db</option>
+              <option>D</option><option>D#</option><option>Eb</option>
+              <option>E</option><option>F</option><option>F#</option>
+              <option>Gb</option><option>G</option><option>G#</option>
+              <option>Ab</option><option>A</option><option>A#</option>
+              <option>Bb</option><option selected>B</option>
+            </optgroup>
+            <optgroup label="Menores">
+              <option>Cm</option><option>C#m</option><option>Dbm</option>
+              <option>Dm</option><option>D#m</option><option>Ebm</option>
+              <option>Em</option><option>Fm</option><option>F#m</option>
+              <option>Gbm</option><option>Gm</option><option>G#m</option>
+              <option>Abm</option><option>Am</option><option>A#m</option>
+              <option>Bbm</option><option>Bm</option>
+            </optgroup>
           </select>
         </div>
         <div class="form-group">
@@ -781,12 +792,16 @@ const TO_FLAT  = {'C#':'Db','D#':'Eb','F#':'Gb','G#':'Ab','A#':'Bb'};
 function normNote(n) { return ENARMON[n] || n; }
 
 function transposeNote(note, semi) {
-  const idx = NOTES.indexOf(normNote(note));
+  // Handles plain notes ("G", "C#") and minor keys ("Am", "G#m")
+  const m = note.match(/^([A-G][#b]?)(m?)$/);
+  const root = m ? m[1] : note;
+  const suffix = m ? m[2] : '';
+  const idx = NOTES.indexOf(normNote(root));
   if (idx === -1) return note;
   const ni = ((idx + semi) % 12 + 12) % 12;
   const out = NOTES[ni];
-  if (note.includes('b') && TO_FLAT[out]) return TO_FLAT[out];
-  return out;
+  const outNote = (root.includes('b') && TO_FLAT[out]) ? TO_FLAT[out] : out;
+  return outNote + suffix;
 }
 
 function transposeChordToken(tok, semi) {
