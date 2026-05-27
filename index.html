@@ -260,27 +260,11 @@ html, body {
 .song-item:hover .song-edit { opacity: 1; }
 .song-edit:hover { color: var(--accent); }
 
-/* Move up/down buttons */
-.song-move-btns { display: none; flex-direction: column; gap: 1px; flex-shrink: 0; }
-.song-move-btn {
-  background: none; border: 1px solid var(--border); color: var(--text-muted);
-  border-radius: 4px; width: 24px; height: 22px; cursor: pointer;
-  font-size: 0.6rem; line-height: 1; display: flex; align-items: center;
-  justify-content: center; transition: all 0.12s;
-}
-.song-move-btn:hover { background: var(--accent-light); border-color: var(--accent); color: var(--accent-deep); }
-.song-move-btn:disabled { opacity: 0.2; cursor: default; }
-
 /* On touch devices: always show move buttons and del/edit, hide drag handle */
 @media (hover: none) and (pointer: coarse) {
   .song-drag { display: none; }
-  .song-move-btns { display: flex; }
   .song-del { opacity: 1 !important; }
   .song-edit { opacity: 1 !important; }
-}
-/* On desktop hover: show del/edit on hover, hide move buttons */
-@media (hover: hover) {
-  .song-move-btns { display: none !important; }
 }
 
 /* ══════════════════════════════════
@@ -664,7 +648,7 @@ html, body {
 }
 </style>
 </head>
-<body class="tab-cifra">
+<body class="tab-setlist">
 
 <div id="root">
   <!-- HEADER -->
@@ -687,8 +671,8 @@ html, body {
   <!-- MOBILE TABS -->
   <div id="mobile-tabs">
     <div class="tab-bar">
-      <button class="tab-btn" id="tab-setlist-btn" onclick="switchTab('setlist')">🎵 Setlist</button>
-      <button class="tab-btn active" id="tab-cifra-btn" onclick="switchTab('cifra')">🎼 Cifra</button>
+      <button class="tab-btn active" id="tab-setlist-btn" onclick="switchTab('setlist')">🎵 Setlist</button>
+      <button class="tab-btn" id="tab-cifra-btn" onclick="switchTab('cifra')">🎼 Cifra</button>
     </div>
   </div>
 
@@ -1130,10 +1114,6 @@ function renderSongList() {
           <div class="song-artist">${esc(song.artist||'')}</div>
         </div>
         <span class="song-key-badge">${esc(song.key)}</span>
-        <div class="song-move-btns">
-          <button class="song-move-btn" onclick="moveSong(event,${i},-1)" ${i===0?'disabled':''} title="Mover para cima">▲</button>
-          <button class="song-move-btn" onclick="moveSong(event,${i},+1)" ${i===songs.length-1?'disabled':''} title="Mover para baixo">▼</button>
-        </div>
         <button class="song-edit" onclick="openModal(event,${i})" title="Editar">✏</button>
         <button class="song-del" onclick="deleteSong(event,${i})">✕</button>
       `;
@@ -1214,16 +1194,6 @@ function deleteSong(e, i) {
   save(); renderSongList(); renderSheet();
 }
 
-function moveSong(e, i, dir) {
-  e.stopPropagation();
-  const songs = getSongs();
-  const j = i + dir;
-  if (j < 0 || j >= songs.length) return;
-  [songs[i], songs[j]] = [songs[j], songs[i]];
-  if (activeIdx === i) activeIdx = j;
-  else if (activeIdx === j) activeIdx = i;
-  save(); renderSongList(); renderSheet();
-}
 
 // ══════════════════════════════════
 // CONTROLS
