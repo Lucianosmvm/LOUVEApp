@@ -1082,9 +1082,10 @@ function syncPerf() {
 
   document.getElementById('perf-title').textContent = song.title + (song.artist ? ` — ${song.artist}` : '');
   document.getElementById('perf-info').textContent = `Tom: ${curKey}` + (capo > 0 ? `  Capo: ${capo}ª casa` : '');
-  document.getElementById('perf-key-display').textContent = curKey;
-  document.getElementById('perf-capo-display').textContent = capo;
-  document.getElementById('perf-speed-display').textContent = scrollSpeed;
+
+  const speedLabel = scrollSpeed % 1 === 0 ? scrollSpeed : scrollSpeed.toFixed(1);
+  const ps = document.getElementById('perf-speed-display');
+  if (ps) ps.textContent = speedLabel;
 
   const pc = document.getElementById('perf-chord-content');
   pc.innerHTML = buildChordHTML(song.chords || '');
