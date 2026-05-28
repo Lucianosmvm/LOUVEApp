@@ -856,8 +856,8 @@ Seu rosto brilha mais que o sol
 
 [Refrão]
 G
-Messias, estamos te esperando vem"></textarea>
-        <span class="form-hint">Cole o texto da cifra do Cifra Club. Linhas com acordes são coloridas automaticamente.</span>
+Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea>
+        <span class="form-hint">Cole o texto da cifra do Cifra Club. Tom e capotraste são detectados automaticamente.</span>
       </div>
     </div>
     <div class="modal-footer">
@@ -1442,6 +1442,81 @@ document.getElementById('group-modal-overlay').addEventListener('click', functio
 });
 
 // ══════════════════════════════════
+// CIFRA CLUB PASTE PARSER
+// ══════════════════════════════════
+const KEY_NAMES = ['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B','Cm','C#m','Dbm','Dm','D#m','Ebm','Em','Fm','F#m','Gbm','Gm','G#m','Abm','Am','A#m','Bbm','Bm'];
+
+function parseCifraClubText(raw) {
+  const result = { title: '', artist: '', key: '', capo: 0, chords: raw };
+  const lines = raw.split('\n');
+
+  // Detect "Tom: X" (case-insensitive). Cifra Club uses e.g. "Tom: G" or "Tom:  Bm"
+  const tomRe = /^\s*tom\s*:\s*([A-G][#b]?m?)\b/i;
+  // Detect capo: "Capotraste na X casa" / "Capotraste: X" / "Capo: X"
+  const capoRe = /^\s*(?:capo(?:traste)?)\s*(?::\s*|na\s+)(\d+)/i;
+  // Detect "Afinação:" line — drop it (noise)
+  const afinacaoRe = /^\s*afina[cç][aã]o\s*:/i;
+
+  const cleaned = [];
+  for (let i = 0; i < lines.length; i++) {
+    const ln = lines[i];
+    const tm = ln.match(tomRe);
+    if (tm) {
+      // Normalize: root uppercase, 'b' (flat) lowercase, 'm' (minor) lowercase
+      let raw = tm[1];
+      let root = raw[0].toUpperCase();
+      let rest = raw.slice(1);
+      // Accidental
+      let acc = '';
+      if (rest[0] === '#' || rest[0] === 'b' || rest[0] === 'B') {
+        acc = (rest[0] === '#') ? '#' : 'b';
+        rest = rest.slice(1);
+      }
+      // Minor
+      const minor = /^m/i.test(rest) ? 'm' : '';
+      const fixed = root + acc + minor;
+      if (KEY_NAMES.includes(fixed)) result.key = fixed;
+      continue;
+    }
+    const cm = ln.match(capoRe);
+    if (cm) {
+      const n = parseInt(cm[1]);
+      if (n >= 0 && n <= 12) result.capo = n;
+      continue;
+    }
+    if (afinacaoRe.test(ln)) continue;
+    cleaned.push(ln);
+  }
+
+  // Trim leading/trailing blank lines
+  while (cleaned.length && !cleaned[0].trim()) cleaned.shift();
+  while (cleaned.length && !cleaned[cleaned.length - 1].trim()) cleaned.pop();
+
+  result.chords = cleaned.join('\n');
+  return result;
+}
+
+function handleChordsPaste(e) {
+  const text = (e.clipboardData || window.clipboardData).getData('text');
+  if (!text) return;
+  const ta = document.getElementById('inp-chords');
+  // Only auto-fill on full replacement paste into empty/all-selected field
+  const isFullPaste = ta.value === '' || (ta.selectionStart === 0 && ta.selectionEnd === ta.value.length);
+  const parsed = parseCifraClubText(text);
+  if (!isFullPaste) return; // partial paste: let default behavior insert raw
+
+  e.preventDefault();
+  ta.value = parsed.chords;
+
+  // Fill key only if empty or default
+  const keyInp = document.getElementById('inp-key');
+  if (parsed.key && (editingIdx < 0 || keyInp.value === '')) keyInp.value = parsed.key;
+  // Fill capo only if currently 0
+  const capoInp = document.getElementById('inp-capo');
+  if (parsed.capo > 0 && (parseInt(capoInp.value) || 0) === 0) capoInp.value = parsed.capo;
+}
+
+// ══════════════════════════════════
 // STORAGE
 // ══════════════════════════════════
 function save() {
@@ -1621,6 +1696,57 @@ Em nossas vidas
 ];
 
 // ══════════════════════════════════
+// SHARE TARGET HANDLER
+// ══════════════════════════════════
+function handleShareTarget() {
+  const params = new URLSearchParams(window.location.search);
+  const sharedText = params.get('text') || '';
+  const sharedTitle = params.get('title') || '';
+  const sharedUrl = params.get('url') || '';
+  if (!sharedText && !sharedTitle && !sharedUrl) return;
+
+  // Clean URL so reload doesn't re-trigger
+  history.replaceState(null, '', window.location.pathname);
+
+  // Need a group to add to
+  if (!activeGroupId) {
+    if (!groups.length) {
+      const g = { id: uid(), name: 'Compartilhadas', color: GROUP_COLORS[0], songs: [] };
+      groups.push(g);
+      activeGroupId = g.id;
+      save();
+      renderGroupsBar();
+    } else {
+      activeGroupId = groups[0].id;
+    }
+  }
+
+  // Compose payload: prefer text body, fall back to url
+  const body = sharedText || sharedUrl;
+  openModal(-1);
+  // Pre-fill after modal open animation
+  setTimeout(() => {
+    const titleInp = document.getElementById('inp-title');
+    const chordsInp = document.getElementById('inp-chords');
+    if (sharedTitle) titleInp.value = sharedTitle;
+    if (body) {
+      const parsed = parseCifraClubText(body);
+      chordsInp.value = parsed.chords;
+      if (parsed.key) document.getElementById('inp-key').value = parsed.key;
+      if (parsed.capo > 0) document.getElementById('inp-capo').value = parsed.capo;
+      // Try to extract title from first non-empty line if not provided
+      if (!sharedTitle) {
+        const firstLine = body.split('\n').find(l => l.trim());
+        if (firstLine && firstLine.length < 80 && !/^\[/.test(firstLine)) {
+          titleInp.value = firstLine.trim();
+        }
+      }
+    }
+    titleInp.focus();
+  }, 200);
+}
+
+// ══════════════════════════════════
 // INIT
 // ══════════════════════════════════
 load();
@@ -1631,6 +1757,7 @@ if (!groups.length) {
 renderGroupsBar();
 renderSongList();
 renderSheet();
+handleShareTarget();
 </script>
 <script>
 if ('serviceWorker' in navigator) {
