@@ -1,4 +1,4 @@
-const CACHE = 'louva-plus-v1';
+const CACHE = 'louva-plus-v3';
 
 // Tudo que precisa funcionar offline
 const ASSETS = [
@@ -46,7 +46,20 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Assets locais: cache primeiro
+  // index.html: rede primeiro para sempre pegar versão nova
+  if (url.origin === self.location.origin && (url.pathname.endsWith('/') || url.pathname.endsWith('index.html'))) {
+    event.respondWith(
+      fetch(event.request)
+        .then(res => {
+          if (res.ok) caches.open(CACHE).then(c => c.put(event.request, res.clone()));
+          return res;
+        })
+        .catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Outros assets locais: cache primeiro
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.match(event.request).then(cached => {

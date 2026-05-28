@@ -710,7 +710,7 @@ html, body {
         <div class="tb-sep"></div>
         <!-- Capo -->
         <div class="tb-group">
-          <span class="tb-label">Capo</span>
+          <span class="tb-label">Capotraste</span>
           <button class="btn" onclick="changeCapo(-1)">−</button>
           <span class="tb-val" id="capo-display">0</span>
           <button class="btn" onclick="changeCapo(+1)">+</button>
@@ -726,7 +726,7 @@ html, body {
         <div class="tb-sep"></div>
         <!-- Scroll -->
         <div class="tb-group">
-          <span class="tb-label">Vel.</span>
+          <span class="tb-label">Velocidade</span>
           <button class="btn" onclick="changeScrollSpeed(-1)">−</button>
           <span class="tb-val small" id="scroll-speed-display">5</span>
           <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
@@ -778,7 +778,7 @@ html, body {
       </div>
       <!-- Velocidade -->
       <div class="tb-group">
-        <span class="tb-label" style="font-size:0.6rem;color:var(--text-muted)">Vel.</span>
+        <span class="tb-label" style="font-size:0.6rem;color:var(--text-muted)">Velocidade</span>
         <button class="btn" onclick="changeScrollSpeed(-1)">−</button>
         <span class="tb-val small" id="perf-speed-display">5</span>
         <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
@@ -1114,9 +1114,11 @@ function renderSongList() {
           <div class="song-artist">${esc(song.artist||'')}</div>
         </div>
         <span class="song-key-badge">${esc(song.key)}</span>
-        <button class="song-edit" onclick="openModal(event,${i})" title="Editar">✏</button>
-        <button class="song-del" onclick="deleteSong(event,${i})">✕</button>
+        <button class="song-edit" title="Editar">✏</button>
+        <button class="song-del" title="Remover">✕</button>
       `;
+      div.querySelector('.song-edit').addEventListener('click', e => { e.stopPropagation(); openModal(e, i); });
+      div.querySelector('.song-del').addEventListener('click', e => { e.stopPropagation(); deleteSong(e, i); });
       div.addEventListener('click', () => selectSong(i));
       div.addEventListener('dblclick', () => openModal(i));
       div.addEventListener('dragstart', () => { dragSrcIdx = i; div.classList.add('dragging'); });
@@ -1259,7 +1261,7 @@ function enterPerformanceMode() {
   document.getElementById('perf-fab').textContent = '⏸';
   document.getElementById('perf-fab').classList.remove('paused');
   perfScrollRAF = requestAnimationFrame(perfScrollStep);
-  try { overlay.requestFullscreen && overlay.requestFullscreen(); } catch(e) {}
+  try { if (overlay.requestFullscreen && !navigator.standalone && !window.matchMedia('(display-mode: standalone)').matches) overlay.requestFullscreen(); } catch(e) {}
 }
 
 function syncPerf() {
