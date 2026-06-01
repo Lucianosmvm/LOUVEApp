@@ -527,7 +527,7 @@ html, body {
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
-#modal-overlay, #group-modal-overlay {
+#modal-overlay, #group-modal-overlay, #copy-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
@@ -540,7 +540,7 @@ html, body {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#modal-overlay.open, #group-modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open { opacity: 1; pointer-events: all; }
 
 .modal {
   background: var(--surface);
@@ -556,9 +556,28 @@ html, body {
   transition: transform 0.25s;
 }
 #modal-overlay.open .modal,
-#group-modal-overlay.open .modal { transform: translateY(0); }
+#group-modal-overlay.open .modal,
+#copy-modal-overlay.open .modal { transform: translateY(0); }
 
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
+
+.key-pick-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin: 0.5rem 0 0.3rem; font-weight: 600; }
+.key-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0.35rem; }
+.key-opt {
+  padding: 0.5rem 0.2rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+.key-opt:active { transform: scale(0.94); }
+.key-opt.selected { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+@media (max-width: 480px) { .key-grid { grid-template-columns: repeat(5, 1fr); } }
 .modal-header { padding: 0.75rem 1.25rem; border-bottom: 1px solid var(--border-soft); display: flex; align-items: center; justify-content: space-between; }
 .modal-header h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.1rem; font-weight: 700; color: var(--text); }
 .modal-close { background: none; border: none; color: var(--text-muted); font-size: 1.2rem; cursor: pointer; }
@@ -684,6 +703,7 @@ html, body {
           <span class="sidebar-label" id="sidebar-group-label">🎵 Setlist</span>
         </div>
         <button class="btn btn-primary" onclick="openModal()" style="width:100%;padding:0.55rem">+ Adicionar Cifra</button>
+        <button class="btn" onclick="openCopyModal()" style="width:100%;padding:0.45rem;margin-top:0.4rem;font-size:0.78rem">⧉ Copiar músicas de outro grupo</button>
       </div>
       <div id="song-list"></div>
     </aside>
@@ -692,6 +712,7 @@ html, body {
     <div id="sidebar-mobile">
       <div class="sidebar-top-mobile">
         <button class="btn btn-primary" onclick="openModal()" style="width:100%;padding:0.6rem">+ Adicionar Cifra</button>
+        <button class="btn" onclick="openCopyModal()" style="width:100%;padding:0.5rem;margin-top:0.4rem;font-size:0.8rem">⧉ Copiar músicas de outro grupo</button>
       </div>
       <div id="song-list-mobile"></div>
     </div>
@@ -728,7 +749,7 @@ html, body {
         <div class="tb-group">
           <span class="tb-label">Velocidade</span>
           <button class="btn" onclick="changeScrollSpeed(-1)">−</button>
-          <span class="tb-val small" id="scroll-speed-display">5</span>
+          <span class="tb-val small" id="scroll-speed-display">1</span>
           <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
         </div>
         <div class="tb-group" style="margin-left:auto; gap:0.4rem">
@@ -770,6 +791,11 @@ html, body {
       <div id="perf-info"></div>
     </div>
     <div class="perf-controls">
+      <!-- Navegação -->
+      <div class="tb-group">
+        <button class="btn" id="perf-prev" onclick="perfStep(-1)" title="Música anterior">‹ Ant</button>
+        <button class="btn" id="perf-next" onclick="perfStep(+1)" title="Próxima música">Próx ›</button>
+      </div>
       <!-- Fonte -->
       <div class="tb-group">
         <span class="tb-label" style="font-size:0.6rem;color:var(--text-muted)">Fonte</span>
@@ -780,7 +806,7 @@ html, body {
       <div class="tb-group">
         <span class="tb-label" style="font-size:0.6rem;color:var(--text-muted)">Velocidade</span>
         <button class="btn" onclick="changeScrollSpeed(-1)">−</button>
-        <span class="tb-val small" id="perf-speed-display">5</span>
+        <span class="tb-val small" id="perf-speed-display">1</span>
         <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
       </div>
       <button class="btn" onclick="exitPerformanceMode()" style="border-color:var(--red);color:var(--red);font-weight:700">✕ Sair</button>
@@ -818,30 +844,17 @@ html, body {
       </div>
       <div class="form-row">
         <div class="form-group">
-          <label>Tom Original</label>
-          <select id="inp-key">
-            <optgroup label="Maiores">
-              <option>C</option><option>C#</option><option>Db</option>
-              <option>D</option><option>D#</option><option>Eb</option>
-              <option>E</option><option>F</option><option>F#</option>
-              <option>Gb</option><option>G</option><option>G#</option>
-              <option>Ab</option><option>A</option><option>A#</option>
-              <option>Bb</option><option selected>B</option>
-            </optgroup>
-            <optgroup label="Menores">
-              <option>Cm</option><option>C#m</option><option>Dbm</option>
-              <option>Dm</option><option>D#m</option><option>Ebm</option>
-              <option>Em</option><option>Fm</option><option>F#m</option>
-              <option>Gbm</option><option>Gm</option><option>G#m</option>
-              <option>Abm</option><option>Am</option><option>A#m</option>
-              <option>Bbm</option><option>Bm</option>
-            </optgroup>
-          </select>
-        </div>
-        <div class="form-group">
           <label>Capotraste (casa)</label>
           <input type="number" id="inp-capo" value="0" min="0" max="12">
         </div>
+      </div>
+      <div class="form-group">
+        <label>Tom Original</label>
+        <input type="hidden" id="inp-key" value="B">
+        <div class="key-pick-label">Maiores</div>
+        <div class="key-grid" id="key-grid-major"></div>
+        <div class="key-pick-label">Menores</div>
+        <div class="key-grid" id="key-grid-minor"></div>
       </div>
       <div class="form-group">
         <label>Cifra</label>
@@ -894,6 +907,40 @@ Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea
   </div>
 </div>
 
+<!-- ══════════════════════════════════
+     MODAL (copiar músicas entre grupos)
+══════════════════════════════════ -->
+<div id="copy-modal-overlay">
+  <div class="modal" style="max-height:85dvh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>Copiar músicas</h3>
+      <button class="modal-close" onclick="closeCopyModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>De qual grupo</label>
+        <select id="copy-src-group" onchange="renderCopySongList()"></select>
+      </div>
+      <div class="form-group">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <label style="margin:0">Músicas</label>
+          <button class="btn" id="copy-select-all" onclick="toggleCopySelectAll()" style="font-size:0.72rem;padding:0.2rem 0.5rem">Todas</button>
+        </div>
+        <div id="copy-song-list" style="max-height:38dvh;overflow-y:auto;border:1px solid var(--border-soft);border-radius:8px;-webkit-overflow-scrolling:touch"></div>
+      </div>
+      <div class="form-group">
+        <label>Para qual grupo</label>
+        <select id="copy-dst-group"></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeCopyModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="copySelectedSongs()" style="padding:0.5rem 1.25rem">Copiar</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════
 // STATE
@@ -904,7 +951,7 @@ let activeIdx = -1;
 let transposeOffset = 0;
 let capoOverride = -1;
 let fontSize = 14;
-let scrollSpeed = 5;
+let scrollSpeed = 1;
 let editingIdx = -1;
 let editingGroupId = null;
 let dragSrcIdx = -1;
@@ -1026,6 +1073,18 @@ function getEffectiveCapo() {
   return capoOverride >= 0 ? capoOverride : (parseInt(songs[activeIdx].capo) || 0);
 }
 
+// Per-song display values from stored fields (independent of active session)
+function songDisplayCapo(song) {
+  return (typeof song.capoOverride === 'number') ? song.capoOverride : (parseInt(song.capo) || 0);
+}
+function songDisplayKey(song) {
+  if (!song.key) return '';
+  const offset = parseInt(song.keyOffset) || 0;
+  const capoOrig = parseInt(song.capo) || 0;
+  const semi = offset + (songDisplayCapo(song) - capoOrig);
+  return transposeNote(song.key, semi);
+}
+
 // ══════════════════════════════════
 // RENDER GROUPS BAR
 // ══════════════════════════════════
@@ -1113,7 +1172,7 @@ function renderSongList() {
           <div class="song-title">${esc(song.title)}</div>
           <div class="song-artist">${esc(song.artist||'')}</div>
         </div>
-        <span class="song-key-badge">${esc(song.key)}</span>
+        <span class="song-key-badge">${esc(songDisplayKey(song))}${songDisplayCapo(song) > 0 ? ` · C${songDisplayCapo(song)}` : ''}</span>
         <button class="song-edit" title="Editar">✏</button>
         <button class="song-del" title="Remover">✕</button>
       `;
@@ -1178,8 +1237,9 @@ function deleteGroup(e, id) {
 function selectSong(i) {
   if (activeIdx === i) { switchTab('cifra'); return; }
   activeIdx = i;
-  transposeOffset = 0;
-  capoOverride = -1;
+  const sel = getSongs()[i];
+  transposeOffset = parseInt(sel && sel.keyOffset) || 0;
+  capoOverride = (sel && typeof sel.capoOverride === 'number') ? sel.capoOverride : -1;
   stopMainScroll();
   renderSongList();
   renderSheet();
@@ -1200,13 +1260,36 @@ function deleteSong(e, i) {
 // ══════════════════════════════════
 // CONTROLS
 // ══════════════════════════════════
-function transposeKey(d) { if (activeIdx===-1) return; transposeOffset+=d; renderSheet(); }
+function transposeKey(d) {
+  if (activeIdx===-1) return;
+  transposeOffset+=d;
+  const songs = getSongs();
+  songs[activeIdx].keyOffset = transposeOffset;
+  save();
+  renderSheet();
+  renderSongList();
+}
 function changeCapo(d) {
   if (activeIdx===-1) return;
   capoOverride = Math.max(0, Math.min(12, getEffectiveCapo()+d));
+  const songs = getSongs();
+  songs[activeIdx].capoOverride = capoOverride;
+  save();
   renderSheet();
+  renderSongList();
 }
-function resetAll() { transposeOffset=0; capoOverride=-1; renderSheet(); }
+function resetAll() {
+  transposeOffset=0;
+  capoOverride=-1;
+  if (activeIdx!==-1) {
+    const songs = getSongs();
+    songs[activeIdx].keyOffset = 0;
+    delete songs[activeIdx].capoOverride;
+    save();
+  }
+  renderSheet();
+  renderSongList();
+}
 function changeFontSize(d) {
   fontSize = Math.max(10, Math.min(26, fontSize+d));
   document.getElementById('font-size-display').textContent = fontSize;
@@ -1257,11 +1340,40 @@ function enterPerformanceMode() {
   const overlay = document.getElementById('perf-overlay');
   overlay.classList.add('active');
   document.getElementById('perf-sheet-wrap').scrollTop = 0;
-  perfScrolling = true; perfScrollAccum = 0; lastPerfTs = null;
-  document.getElementById('perf-fab').textContent = '⏸';
-  document.getElementById('perf-fab').classList.remove('paused');
-  perfScrollRAF = requestAnimationFrame(perfScrollStep);
+  perfScrolling = false; perfScrollAccum = 0; lastPerfTs = null;
+  const fab = document.getElementById('perf-fab');
+  fab.textContent = '▶'; fab.classList.add('paused');
+  updatePerfNavButtons();
   try { if (overlay.requestFullscreen && !navigator.standalone && !window.matchMedia('(display-mode: standalone)').matches) overlay.requestFullscreen(); } catch(e) {}
+}
+
+function perfStep(d) {
+  const songs = getSongs();
+  if (activeIdx === -1 || !songs.length) return;
+  const ni = activeIdx + d;
+  if (ni < 0 || ni >= songs.length) return;
+  stopPerfScroll();
+  activeIdx = ni;
+  const sel = songs[ni];
+  transposeOffset = parseInt(sel && sel.keyOffset) || 0;
+  capoOverride = (sel && typeof sel.capoOverride === 'number') ? sel.capoOverride : -1;
+  syncPerf();
+  document.getElementById('perf-sheet-wrap').scrollTop = 0;
+  perfScrollAccum = 0; lastPerfTs = null;
+  renderSongList();
+  renderSheet();
+  updatePerfNavButtons();
+}
+
+function updatePerfNavButtons() {
+  const songs = getSongs();
+  const prev = document.getElementById('perf-prev');
+  const next = document.getElementById('perf-next');
+  if (!prev || !next) return;
+  prev.disabled = activeIdx <= 0;
+  next.disabled = activeIdx >= songs.length - 1;
+  prev.style.opacity = prev.disabled ? '0.35' : '';
+  next.style.opacity = next.disabled ? '0.35' : '';
 }
 
 function syncPerf() {
@@ -1338,6 +1450,33 @@ function switchTab(tab) {
 // ══════════════════════════════════
 // MODAL (cifra)
 // ══════════════════════════════════
+const KEYS_MAJOR = ['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B'];
+const KEYS_MINOR = ['Cm','C#m','Dbm','Dm','D#m','Ebm','Em','Fm','F#m','Gbm','Gm','G#m','Abm','Am','A#m','Bbm','Bm'];
+
+function buildKeyGrids() {
+  const mk = (arr, gridId) => {
+    const grid = document.getElementById(gridId);
+    grid.innerHTML = '';
+    arr.forEach(k => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'key-opt';
+      b.dataset.key = k;
+      b.textContent = k;
+      b.onclick = () => setKeyValue(k);
+      grid.appendChild(b);
+    });
+  };
+  mk(KEYS_MAJOR, 'key-grid-major');
+  mk(KEYS_MINOR, 'key-grid-minor');
+}
+
+function setKeyValue(k) {
+  document.getElementById('inp-key').value = k;
+  document.querySelectorAll('#key-grid-major .key-opt, #key-grid-minor .key-opt')
+    .forEach(b => b.classList.toggle('selected', b.dataset.key === k));
+}
+
 function openModal(evtOrIdx = -1, idx = -1) {
   if (evtOrIdx && typeof evtOrIdx === 'object' && evtOrIdx.stopPropagation) {
     evtOrIdx.stopPropagation();
@@ -1352,13 +1491,13 @@ function openModal(evtOrIdx = -1, idx = -1) {
     const s = songs[idx];
     document.getElementById('inp-title').value = s.title;
     document.getElementById('inp-artist').value = s.artist || '';
-    document.getElementById('inp-key').value = s.key;
+    setKeyValue(s.key);
     document.getElementById('inp-capo').value = s.capo || 0;
     document.getElementById('inp-chords').value = s.chords || '';
   } else {
     document.getElementById('inp-title').value = '';
     document.getElementById('inp-artist').value = '';
-    document.getElementById('inp-key').value = 'B';
+    setKeyValue('B');
     document.getElementById('inp-capo').value = '0';
     document.getElementById('inp-chords').value = '';
   }
@@ -1442,6 +1581,85 @@ document.getElementById('group-modal-overlay').addEventListener('click', functio
 });
 
 // ══════════════════════════════════
+// COPIAR MÚSICAS ENTRE GRUPOS
+// ══════════════════════════════════
+function openCopyModal() {
+  if (groups.length < 2) { alert('Crie pelo menos 2 grupos para copiar músicas.'); return; }
+  const src = document.getElementById('copy-src-group');
+  const dst = document.getElementById('copy-dst-group');
+  src.innerHTML = '';
+  dst.innerHTML = '';
+  groups.forEach(g => {
+    src.appendChild(new Option(g.name, g.id));
+    dst.appendChild(new Option(g.name, g.id));
+  });
+  // default: source = active group, dest = first other group
+  src.value = activeGroupId;
+  const other = groups.find(g => g.id !== activeGroupId);
+  dst.value = other ? other.id : activeGroupId;
+  renderCopySongList();
+  document.getElementById('copy-modal-overlay').classList.add('open');
+}
+
+function closeCopyModal() { document.getElementById('copy-modal-overlay').classList.remove('open'); }
+
+function renderCopySongList() {
+  const srcId = document.getElementById('copy-src-group').value;
+  const g = getGroup(srcId);
+  const list = document.getElementById('copy-song-list');
+  list.innerHTML = '';
+  if (!g || !g.songs.length) {
+    list.innerHTML = '<div style="padding:1rem;color:var(--text-muted);font-size:0.8rem;text-align:center">Grupo sem músicas.</div>';
+    return;
+  }
+  g.songs.forEach((song, i) => {
+    const row = document.createElement('label');
+    row.style.cssText = 'display:flex;align-items:center;gap:0.6rem;padding:0.55rem 0.75rem;border-bottom:1px solid var(--border-soft);cursor:pointer';
+    const keyTxt = songDisplayKey(song);
+    const capo = songDisplayCapo(song);
+    row.innerHTML = `
+      <input type="checkbox" class="copy-song-cb" data-idx="${i}" style="width:16px;height:16px;flex-shrink:0">
+      <span style="flex:1;min-width:0">
+        <span style="font-weight:600;font-size:0.85rem">${esc(song.title)}</span>
+        ${song.artist ? `<span style="color:var(--text-muted);font-size:0.75rem"> — ${esc(song.artist)}</span>` : ''}
+      </span>
+      <span style="font-size:0.72rem;color:var(--accent);font-weight:600;flex-shrink:0">${esc(keyTxt)}${capo>0?` · C${capo}`:''}</span>
+    `;
+    list.appendChild(row);
+  });
+}
+
+function toggleCopySelectAll() {
+  const cbs = document.querySelectorAll('.copy-song-cb');
+  const allChecked = cbs.length > 0 && [...cbs].every(c => c.checked);
+  cbs.forEach(c => c.checked = !allChecked);
+}
+
+function copySelectedSongs() {
+  const srcId = document.getElementById('copy-src-group').value;
+  const dstId = document.getElementById('copy-dst-group').value;
+  if (srcId === dstId) { alert('Escolha um grupo de destino diferente da origem.'); return; }
+  const srcG = getGroup(srcId);
+  const dstG = getGroup(dstId);
+  if (!srcG || !dstG) return;
+  const idxs = [...document.querySelectorAll('.copy-song-cb')].filter(c => c.checked).map(c => parseInt(c.dataset.idx));
+  if (!idxs.length) { alert('Selecione ao menos uma música.'); return; }
+  idxs.forEach(i => {
+    const clone = JSON.parse(JSON.stringify(srcG.songs[i]));
+    clone.id = uid();
+    dstG.songs.push(clone);
+  });
+  save();
+  closeCopyModal();
+  renderGroupsBar(); renderSongList();
+  alert(`${idxs.length} música(s) copiada(s) para "${dstG.name}".`);
+}
+
+document.getElementById('copy-modal-overlay').addEventListener('click', function(e) {
+  if (e.target === this) closeCopyModal();
+});
+
+// ══════════════════════════════════
 // CIFRA CLUB PASTE PARSER
 // ══════════════════════════════════
 const KEY_NAMES = ['C','C#','Db','D','D#','Eb','E','F','F#','Gb','G','G#','Ab','A','A#','Bb','B','Cm','C#m','Dbm','Dm','D#m','Ebm','Em','Fm','F#m','Gbm','Gm','G#m','Abm','Am','A#m','Bbm','Bm'];
@@ -1510,7 +1728,7 @@ function handleChordsPaste(e) {
 
   // Fill key only if empty or default
   const keyInp = document.getElementById('inp-key');
-  if (parsed.key && (editingIdx < 0 || keyInp.value === '')) keyInp.value = parsed.key;
+  if (parsed.key && (editingIdx < 0 || keyInp.value === '')) setKeyValue(parsed.key);
   // Fill capo only if currently 0
   const capoInp = document.getElementById('inp-capo');
   if (parsed.capo > 0 && (parseInt(capoInp.value) || 0) === 0) capoInp.value = parsed.capo;
@@ -1732,7 +1950,7 @@ function handleShareTarget() {
     if (body) {
       const parsed = parseCifraClubText(body);
       chordsInp.value = parsed.chords;
-      if (parsed.key) document.getElementById('inp-key').value = parsed.key;
+      if (parsed.key) setKeyValue(parsed.key);
       if (parsed.capo > 0) document.getElementById('inp-capo').value = parsed.capo;
       // Try to extract title from first non-empty line if not provided
       if (!sharedTitle) {
@@ -1749,6 +1967,7 @@ function handleShareTarget() {
 // ══════════════════════════════════
 // INIT
 // ══════════════════════════════════
+buildKeyGrids();
 load();
 if (!groups.length) {
   groups = DEMO_GROUPS;
