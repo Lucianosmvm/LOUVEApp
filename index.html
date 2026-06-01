@@ -1344,7 +1344,6 @@ function enterPerformanceMode() {
   const fab = document.getElementById('perf-fab');
   fab.textContent = '▶'; fab.classList.add('paused');
   updatePerfNavButtons();
-  try { if (overlay.requestFullscreen && !navigator.standalone && !window.matchMedia('(display-mode: standalone)').matches) overlay.requestFullscreen(); } catch(e) {}
 }
 
 function perfStep(d) {
@@ -1518,8 +1517,13 @@ function saveSong() {
     chords: document.getElementById('inp-chords').value
   };
   const songs = getSongs();
-  if (editingIdx >= 0) songs[editingIdx] = song;
-  else songs.push(song);
+  if (editingIdx >= 0) {
+    songs[editingIdx] = song;
+    // Reset transposição da sessão se editou a música ativa (tom original mudou)
+    if (editingIdx === activeIdx) { transposeOffset = 0; capoOverride = -1; }
+  } else {
+    songs.push(song);
+  }
   save(); closeModal(); renderSongList();
   if (editingIdx < 0) selectSong(songs.length - 1);
   else renderSheet();
