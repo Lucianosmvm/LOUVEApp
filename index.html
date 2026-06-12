@@ -406,6 +406,7 @@ html, body {
 }
 .cl-chord { color: var(--chord); font-weight: 600; }
 .cl-lyric { color: var(--text); }
+.cl-tab { color: var(--text-muted); white-space: pre; }
 .cl-empty { display: block; height: 0.4em; }
 
 /* ══════════════════════════════════
@@ -1053,6 +1054,147 @@ function transposeLine(line) {
   return line.replace(CHORD_RE, t => transposeChordToken(t, semi));
 }
 
+// ══════════════════════════════════
+// TABLATURE TRANSPOSE
+// Casa na corda = pitch (open + casa). Transpor = somar semitons.
+// Mantém na mesma corda se casa >= 0; senão pula pra corda mais próxima
+// que dê casa válida (grave ao descer, aguda ao passar de 24).
+// ══════════════════════════════════
+const TAB_OPEN = [64, 59, 55, 50, 45, 40]; // e B G D A E, topo→base (afinação padrão)
+
+function isTabLine(raw) {
+  const m = raw.match(/^\s*[eEABDGb]\s*\|(.*)$/);
+  if (!m) return false;
+  const body = m[1];
+  if ((body.match(/-/g) || []).length < 3) return false;
+  return /^[-\d|hpbsxtr\/\\~().\s]*$/.test(body);
+}
+
+function tabOpenFor(block) {
+  if (block.length === 6) return i => TAB_OPEN[i];
+  const map = { e:64, b:59, B:59, g:55, G:55, d:50, D:50, a:45, A:45, E:40 };
+  return i => {
+    const mm = block[i].match(/^\s*([eEABDGb])/);
+    const lab = mm ? mm[1] : 'E';
+    return map[lab] !== undefined ? map[lab] : 40;
+  };
+}
+
+// Caminho rápido: transpõe sem trocar de corda, preservando TODO caractere
+// (articulações h/p/b/~ // \ x () etc.) e realinhando se a largura mudar (9→10).
+// Retorna null se alguma nota precisar mudar de corda (casa fora de 0..24).
+function transposeTabInPlace(parsed, semi, n) {
+  const startMap = [];
+  for (let i = 0; i < n; i++) {
+    startMap[i] = {};
+    const re = /\d+/g; let mm;
+    while ((mm = re.exec(parsed[i].body))) {
+      const fret = parseInt(mm[0], 10) + semi;
+      if (fret < 0 || fret > 24) return null; // precisa trocar de corda → rebuild
+      startMap[i][mm.index] = { len: mm[0].length, text: String(fret) };
+    }
+  }
+  const L = Math.max(...parsed.map(p => p.body.length));
+  const out = parsed.map(() => '');
+  let c = 0;
+  while (c < L) {
+    const here = [];
+    for (let i = 0; i < n; i++) if (startMap[i][c]) here.push({ i, run: startMap[i][c] });
+    if (here.length === 0) {
+      for (let i = 0; i < n; i++) out[i] += (parsed[i].body[c] || '-');
+      c++; continue;
+    }
+    let segLen = Math.max(...here.map(h => h.run.len));
+    for (let i = 0; i < n; i++)
+      for (let k = c + 1; k < c + segLen; k++)
+        if (startMap[i][k]) segLen = k - c;
+    if (here.some(h => h.run.len > segLen)) return null; // sobreposição rara → rebuild
+    const segWidth = Math.max(...here.map(h => h.run.text.length), 1);
+    for (let i = 0; i < n; i++) {
+      const r = here.find(h => h.i === i);
+      let seg = r ? r.run.text : parsed[i].body.slice(c, c + segLen);
+      seg = seg.length < segWidth ? seg + '-'.repeat(segWidth - seg.length) : seg.slice(0, segWidth);
+      out[i] += seg;
+    }
+    c += segLen;
+  }
+  return out;
+}
+
+function transposeTabBlock(block, semi) {
+  if (semi === 0 || block.length === 0) return block.slice();
+  const n = block.length;
+  const openOf = tabOpenFor(block);
+  const parsed = block.map(l => {
+    const m = l.match(/^(\s*[eEABDGb]\s*\|)(.*)$/);
+    let prefix = m[1], body = m[2], trail = '';
+    const tb = body.match(/(\s*\|+\s*)$/);
+    if (tb) { trail = tb[1]; body = body.slice(0, body.length - trail.length); }
+    return { prefix, body, trail };
+  });
+  const inPlace = transposeTabInPlace(parsed, semi, n);
+  if (inPlace) return parsed.map((p, i) => p.prefix + inPlace[i] + p.trail);
+  // coletar eventos (cada número de casa)
+  const events = [];
+  parsed.forEach((p, i) => {
+    const re = /\d+/g; let mm;
+    while ((mm = re.exec(p.body))) {
+      const val = parseInt(mm[0], 10);
+      events.push({ line: i, col: mm.index, len: mm[0].length, val,
+                    pitch: openOf(i) + val + semi });
+    }
+  });
+  // escolher corda destino
+  events.forEach(ev => {
+    const same = ev.pitch - openOf(ev.line);
+    if (same >= 0 && same <= 24) { ev.newLine = ev.line; ev.newText = String(same); return; }
+    let best = -1, bestFret = 0, bestDist = Infinity;
+    for (let j = 0; j < n; j++) {
+      const fret = ev.pitch - openOf(j);
+      if (fret < 0 || fret > 24) continue;
+      const dist = Math.abs(j - ev.line);
+      if (dist < bestDist) { bestDist = dist; best = j; bestFret = fret; }
+    }
+    if (best === -1) { ev.newLine = ev.line; ev.newText = String(Math.max(0, same)); }
+    else { ev.newLine = best; ev.newText = String(bestFret); }
+  });
+  // agrupar por coluna (tempo) e reconstruir preservando espaçamento
+  const beats = new Map();
+  events.forEach(ev => { if (!beats.has(ev.col)) beats.set(ev.col, []); beats.get(ev.col).push(ev); });
+  const cols = [...beats.keys()].sort((a, b) => a - b);
+  const bodies = parsed.map(() => '');
+  let prevEnd = 0;
+  cols.forEach(c => {
+    const beat = beats.get(c);
+    const used = new Set();
+    beat.forEach(ev => {
+      let j = ev.newLine;
+      if (used.has(j)) {
+        for (let d = 1; d < n; d++) {
+          let done = false;
+          for (const cand of [j - d, j + d]) {
+            if (cand < 0 || cand >= n || used.has(cand)) continue;
+            const fret = ev.pitch - openOf(cand);
+            if (fret >= 0 && fret <= 24) { j = cand; ev.newText = String(fret); done = true; break; }
+          }
+          if (done) break;
+        }
+      }
+      used.add(j); ev.place = j;
+    });
+    const gap = c - prevEnd;
+    for (let i = 0; i < n; i++) bodies[i] += '-'.repeat(Math.max(0, gap));
+    const width = Math.max(...beat.map(ev => ev.newText.length));
+    for (let i = 0; i < n; i++) {
+      const ev = beat.find(e => e.place === i);
+      bodies[i] += ev ? ev.newText + '-'.repeat(width - ev.newText.length) : '-'.repeat(width);
+    }
+    prevEnd = c + Math.max(...beat.map(ev => ev.len));
+  });
+  const bodyLen = Math.max(...parsed.map(p => p.body.length));
+  return parsed.map((p, i) => p.prefix + bodies[i] + '-'.repeat(Math.max(0, bodyLen - prevEnd)) + p.trail);
+}
+
 function isChordLine(line) {
   const t = line.trim();
   if (!t || /^\[/.test(t)) return false;
@@ -1065,12 +1207,25 @@ function isChordLine(line) {
 // RENDER CHORD CONTENT
 // ══════════════════════════════════
 function buildChordHTML(source) {
-  return source.split('\n').map(raw => {
-    if (!raw.trim()) return '<span class="cl cl-empty"></span>';
-    if (/^\s*\[/.test(raw)) return `<span class="cl cl-section">${esc(raw)}</span>`;
-    if (isChordLine(raw)) return `<span class="cl cl-chord">${esc(transposeLine(raw))}</span>`;
-    return `<span class="cl cl-lyric">${esc(raw)}</span>`;
-  }).join('');
+  const lines = source.split('\n');
+  const semi = getTotalSemitones();
+  const out = [];
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    if (isTabLine(raw)) {
+      const block = [];
+      let j = i;
+      while (j < lines.length && isTabLine(lines[j]) && block.length < 6) { block.push(lines[j]); j++; }
+      transposeTabBlock(block, semi).forEach(tl => out.push(`<span class="cl cl-tab">${esc(tl)}</span>`));
+      i = j - 1;
+      continue;
+    }
+    if (!raw.trim()) { out.push('<span class="cl cl-empty"></span>'); continue; }
+    if (/^\s*\[/.test(raw)) { out.push(`<span class="cl cl-section">${esc(raw)}</span>`); continue; }
+    if (isChordLine(raw)) { out.push(`<span class="cl cl-chord">${esc(transposeLine(raw))}</span>`); continue; }
+    out.push(`<span class="cl cl-lyric">${esc(raw)}</span>`);
+  }
+  return out.join('');
 }
 
 function esc(s) {
