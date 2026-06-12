@@ -1024,10 +1024,19 @@ function transposeChordToken(tok, semi) {
 
 const CHORD_RE = /\b([A-G][#b]?(m{1,2}|maj\d*|min|dim|aug|sus\d*|add\d*|M)?\d*(\/[A-G][#b]?)?)\b/g;
 
+// Semitones applied to written chord SHAPES.
+// Capo raises sounding pitch, so removing capo must raise the shapes to keep
+// the same sound: shift = offset + (capoOriginal - effectiveCapo).
 function getTotalSemitones() {
   const songs = getSongs();
   const capoOriginal = activeIdx >= 0 ? (parseInt(songs[activeIdx].capo) || 0) : 0;
-  return transposeOffset + (getEffectiveCapo() - capoOriginal);
+  return transposeOffset + (capoOriginal - getEffectiveCapo());
+}
+
+// Semitones applied to the SOUNDING key. Capo is compensated by the shapes,
+// so only the user retune (transposeOffset) changes the real key.
+function getKeySemitones() {
+  return transposeOffset;
 }
 
 function transposeLine(line) {
@@ -1066,7 +1075,7 @@ function esc(s) {
 function getCurrentKey() {
   const songs = getSongs();
   if (activeIdx === -1) return '—';
-  return transposeNote(songs[activeIdx].key, getTotalSemitones());
+  return transposeNote(songs[activeIdx].key, getKeySemitones());
 }
 function getEffectiveCapo() {
   const songs = getSongs();
@@ -1081,9 +1090,7 @@ function songDisplayCapo(song) {
 function songDisplayKey(song) {
   if (!song.key) return '';
   const offset = parseInt(song.keyOffset) || 0;
-  const capoOrig = parseInt(song.capo) || 0;
-  const semi = offset + (songDisplayCapo(song) - capoOrig);
-  return transposeNote(song.key, semi);
+  return transposeNote(song.key, offset);
 }
 
 // ══════════════════════════════════
