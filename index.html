@@ -456,6 +456,11 @@ html, body {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-100%);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
 }
 #perf-title { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; font-weight: 700; color: var(--accent-deep); }
 #perf-info { font-size: 0.73rem; color: var(--text-muted); margin-top: 1px; }
@@ -625,8 +630,11 @@ html, body {
 @media (max-width: 680px) {
   #sidebar { display: none; }
   #mobile-tabs { display: block; }
-  #toolbar { gap: 0.6rem; padding: 0.5rem 0.75rem; }
-  .tb-label { display: none; }
+  #toolbar { gap: 0.5rem 0.7rem; padding: 0.5rem 0.75rem; }
+  .tb-group { flex-direction: column; align-items: center; gap: 0.2rem; }
+  .tb-label { display: block; }
+  .tb-sep { display: none; }
+  .tb-actions { flex-direction: row; align-self: flex-end; }
   #sheet-wrap { padding: 1rem 0.85rem 5rem; }
 
   /* Tab views */
@@ -753,7 +761,7 @@ html, body {
           <span class="tb-val small" id="scroll-speed-display">1</span>
           <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
         </div>
-        <div class="tb-group" style="margin-left:auto; gap:0.4rem">
+        <div class="tb-group tb-actions" style="margin-left:auto; gap:0.4rem">
           <button class="btn" onclick="resetAll()" title="Resetar tom e capo">↺</button>
           <button class="btn btn-play" id="scroll-btn" onclick="enterPerformanceMode()">▶ Play</button>
         </div>
