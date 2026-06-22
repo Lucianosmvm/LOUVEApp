@@ -503,6 +503,88 @@ html, body {
 #perf-fab.paused { background: linear-gradient(135deg, #4a9068, #5ca87a); box-shadow: 0 4px 20px rgba(74,144,104,0.4); }
 
 /* ══════════════════════════════════
+   SYNC FOLLOW OVERLAY
+══════════════════════════════════ */
+#sync-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: #faf7f2;
+  z-index: 520;
+  flex-direction: column;
+}
+#sync-overlay.active { display: flex; }
+#sync-header {
+  background: rgba(250,247,242,0.97);
+  border-bottom: 1px solid var(--border-soft);
+  box-shadow: 0 2px 12px rgba(100,70,20,0.08);
+  padding: 0.6rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+#sync-title { font-family: 'Cormorant Garamond', serif; font-size: 1.05rem; font-weight: 700; color: var(--accent-deep); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#sync-info { font-size: 0.73rem; color: var(--text-muted); margin-top: 1px; }
+.sync-controls { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
+.sync-live {
+  font-size: 0.7rem; font-weight: 700; color: var(--red);
+  letter-spacing: 0.04em;
+  animation: syncPulse 1.6s ease-in-out infinite;
+}
+@keyframes syncPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+#sync-sheet-wrap {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 1.5rem 1.5rem 6rem;
+  -webkit-overflow-scrolling: touch;
+  background: #faf7f2;
+}
+#sync-sheet-wrap::-webkit-scrollbar { width: 3px; }
+#sync-sheet-wrap::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+#sync-waiting {
+  display: none;
+  position: absolute;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 2rem;
+  pointer-events: none;
+}
+#sync-overlay.waiting #sync-waiting { display: flex; }
+#sync-overlay.waiting #sync-sheet-wrap { visibility: hidden; }
+
+/* Sync modal pieces */
+.sync-action-btn {
+  width: 100%;
+  padding: 0.7rem;
+  font-size: 0.9rem;
+  margin-bottom: 0.4rem;
+}
+.sync-code-box {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 2.2rem;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-align: center;
+  color: var(--accent-deep);
+  background: var(--accent-light);
+  border: 1px solid rgba(181,129,58,0.3);
+  border-radius: 10px;
+  padding: 0.9rem 0.5rem 0.9rem 0.8rem;
+  margin: 0.3rem 0;
+}
+.sync-status-line { font-size: 0.82rem; color: var(--text-muted); text-align: center; line-height: 1.5; }
+.sync-divider { display: flex; align-items: center; gap: 0.6rem; color: var(--text-muted); font-size: 0.72rem; margin: 0.4rem 0; }
+.sync-divider::before, .sync-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+#sync-btn.live { background: rgba(192,82,74,0.85); border-color: rgba(255,255,255,0.5); }
+
+/* ══════════════════════════════════
    MOBILE TABS
 ══════════════════════════════════ */
 #mobile-tabs {
@@ -684,6 +766,9 @@ html, body {
   <header id="app-header">
     <h1>✦ Louva<span class="plus">+</span> <span id="song-count"></span></h1>
     <div class="header-btns">
+      <button class="btn" id="sync-btn" onclick="openSyncModal()" title="Sincronizar com outro celular">
+        <span class="btn-icon-sym">⇆</span> <span id="sync-btn-label">Sincronizar</span>
+      </button>
       <button class="btn" onclick="exportPlaylist()" title="Exportar playlist">
         <span class="btn-icon-sym">⬇</span> Exportar
       </button>
@@ -832,6 +917,38 @@ html, body {
 </div>
 
 <!-- ══════════════════════════════════
+     SYNC FOLLOW OVERLAY (espelha o host)
+══════════════════════════════════ -->
+<div id="sync-overlay">
+  <div id="sync-header">
+    <div style="min-width:0">
+      <div id="sync-title"></div>
+      <div id="sync-info"></div>
+    </div>
+    <div class="sync-controls">
+      <span class="sync-live">🔴 AO VIVO</span>
+      <button class="btn" onclick="leaveSync()" style="border-color:var(--red);color:var(--red);font-weight:700">✕ Sair</button>
+    </div>
+  </div>
+  <div id="sync-sheet-wrap"><div class="chord-content" id="sync-chord-content"></div></div>
+  <div id="sync-waiting">Aguardando o host abrir uma cifra…</div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL (sincronização)
+══════════════════════════════════ -->
+<div id="sync-modal-overlay">
+  <div class="modal" style="max-height:70dvh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>⇆ Sincronizar</h3>
+      <button class="modal-close" onclick="closeSyncModal()">✕</button>
+    </div>
+    <div class="modal-body" id="sync-modal-body"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
      MODAL (cifra)
 ══════════════════════════════════ -->
 <div id="modal-overlay">
@@ -951,6 +1068,10 @@ Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea
   </div>
 </div>
 
+<!-- Firebase (sincronização em tempo real). Carrega só online; app funciona offline sem isso. -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
 <script>
 // ══════════════════════════════════
 // STATE
@@ -1048,8 +1169,8 @@ function getKeySemitones() {
   return transposeOffset;
 }
 
-function transposeLine(line) {
-  const semi = getTotalSemitones();
+function transposeLine(line, semiArg) {
+  const semi = (semiArg != null) ? semiArg : getTotalSemitones();
   if (semi === 0) return line;
   return line.replace(CHORD_RE, t => transposeChordToken(t, semi));
 }
@@ -1206,9 +1327,9 @@ function isChordLine(line) {
 // ══════════════════════════════════
 // RENDER CHORD CONTENT
 // ══════════════════════════════════
-function buildChordHTML(source) {
+function buildChordHTML(source, semiArg) {
   const lines = source.split('\n');
-  const semi = getTotalSemitones();
+  const semi = (semiArg != null) ? semiArg : getTotalSemitones();
   const out = [];
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
@@ -1222,7 +1343,7 @@ function buildChordHTML(source) {
     }
     if (!raw.trim()) { out.push('<span class="cl cl-empty"></span>'); continue; }
     if (/^\s*\[/.test(raw)) { out.push(`<span class="cl cl-section">${esc(raw)}</span>`); continue; }
-    if (isChordLine(raw)) { out.push(`<span class="cl cl-chord">${esc(transposeLine(raw))}</span>`); continue; }
+    if (isChordLine(raw)) { out.push(`<span class="cl cl-chord">${esc(transposeLine(raw, semi))}</span>`); continue; }
     out.push(`<span class="cl cl-lyric">${esc(raw)}</span>`);
   }
   return out.join('');
@@ -1416,6 +1537,7 @@ function selectSong(i) {
   renderSheet();
   document.getElementById('sheet-wrap').scrollTop = 0;
   switchTab('cifra');
+  syncOnChange();
 }
 
 function deleteSong(e, i) {
@@ -1439,6 +1561,7 @@ function transposeKey(d) {
   save();
   renderSheet();
   renderSongList();
+  syncOnChange();
 }
 function changeCapo(d) {
   if (activeIdx===-1) return;
@@ -1448,6 +1571,7 @@ function changeCapo(d) {
   save();
   renderSheet();
   renderSongList();
+  syncOnChange();
 }
 function resetAll() {
   transposeOffset=0;
@@ -1460,6 +1584,7 @@ function resetAll() {
   }
   renderSheet();
   renderSongList();
+  syncOnChange();
 }
 function changeFontSize(d) {
   fontSize = Math.max(10, Math.min(26, fontSize+d));
@@ -1467,6 +1592,7 @@ function changeFontSize(d) {
   document.getElementById('chord-content').style.fontSize = fontSize+'px';
   if (document.getElementById('perf-overlay').classList.contains('active'))
     document.getElementById('perf-chord-content').style.fontSize = fontSize+'px';
+  syncOnChange();
 }
 function changeScrollSpeed(d) {
   scrollSpeed = Math.round((Math.max(0.5, Math.min(10, scrollSpeed + (d * 0.5)))) * 10) / 10;
@@ -1533,6 +1659,7 @@ function perfStep(d) {
   renderSongList();
   renderSheet();
   updatePerfNavButtons();
+  syncOnChange();
 }
 
 function updatePerfNavButtons() {
@@ -2153,6 +2280,255 @@ renderSongList();
 renderSheet();
 handleShareTarget();
 </script>
+
+<!-- ══════════════════════════════════
+     SINCRONIZAÇÃO EM TEMPO REAL (Firebase Realtime Database)
+══════════════════════════════════ -->
+<script>
+// ⚠️ COLE AQUI a config do SEU projeto Firebase (console.firebase.google.com →
+//    Configurações do projeto → Seus apps → Web). Sem isso o sync fica desativado;
+//    o resto do app funciona normal.
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBkmIil6gTvRwmYCQ8MuxA9PcuQtZZp0gQ",
+  authDomain: "louvamais-b2b5f.firebaseapp.com",
+  databaseURL: "https://louvamais-b2b5f-default-rtdb.firebaseio.com",
+  projectId: "louvamais-b2b5f"
+};
+
+// Estado do sync
+let fbDb = null;
+let syncRole = null;        // 'host' | 'follower' | null
+let syncRoom = null;        // código da sala
+let syncRefs = [];          // refs do Firebase escutando
+let followState = null;     // último estado recebido do host (follower)
+let lastFollowFrac = 0;     // última posição de scroll recebida
+let lastScrollPush = 0;     // throttle de envio de scroll
+
+function syncConfigured() {
+  return typeof firebase !== 'undefined'
+    && FIREBASE_CONFIG.databaseURL
+    && FIREBASE_CONFIG.databaseURL.indexOf('http') === 0
+    && FIREBASE_CONFIG.databaseURL.indexOf('SEU-PROJETO') === -1;
+}
+
+function syncInit() {
+  if (!syncConfigured()) return false;
+  if (!fbDb) {
+    try {
+      if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+      fbDb = firebase.database();
+    } catch (e) { console.warn('Firebase init falhou:', e); return false; }
+  }
+  return true;
+}
+
+function randCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem I/O/0/1 ambíguos
+  let s = '';
+  for (let i = 0; i < 4; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+
+// ── Cálculo de semitons sem depender do estado local (para o follower) ──
+function semitonesFor(song, keyOffset, capoOverride) {
+  const capoOriginal = parseInt(song.capo) || 0;
+  const eff = (typeof capoOverride === 'number' && capoOverride >= 0) ? capoOverride : capoOriginal;
+  return (parseInt(keyOffset) || 0) + (capoOriginal - eff);
+}
+
+// ══════════════════════════════════
+// HOST: enviar estado
+// ══════════════════════════════════
+function syncPushState() {
+  if (syncRole !== 'host' || !fbDb || !syncRoom) return;
+  const songs = getSongs();
+  if (activeIdx < 0 || !songs[activeIdx]) return;
+  const s = songs[activeIdx];
+  fbDb.ref('rooms/' + syncRoom + '/v').set({
+    song: { title: s.title, artist: s.artist || '', key: s.key, capo: parseInt(s.capo) || 0, chords: s.chords || '' },
+    keyOffset: transposeOffset,
+    capoOverride: capoOverride,
+    fontSize: fontSize,
+    ts: Date.now()
+  });
+}
+
+// Chamado pelas funções de mudança do app (no-op se não for host)
+function syncOnChange() {
+  if (syncRole === 'host') syncPushState();
+}
+
+function syncPushScroll(frac) {
+  if (syncRole !== 'host' || !fbDb || !syncRoom) return;
+  const now = Date.now();
+  if (now - lastScrollPush < 140) return; // throttle ~7x/s
+  lastScrollPush = now;
+  fbDb.ref('rooms/' + syncRoom + '/s').set({ frac: frac, ts: now });
+}
+
+function attachHostScroll() {
+  ['sheet-wrap', 'perf-sheet-wrap'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('scroll', () => {
+      if (syncRole !== 'host') return;
+      const max = el.scrollHeight - el.clientHeight;
+      syncPushScroll(max > 0 ? el.scrollTop / max : 0);
+    }, { passive: true });
+  });
+}
+attachHostScroll();
+
+// ══════════════════════════════════
+// FOLLOWER: receber e espelhar
+// ══════════════════════════════════
+function openSyncOverlay() {
+  document.getElementById('sync-overlay').classList.add('active');
+}
+
+function renderFollow() {
+  const overlay = document.getElementById('sync-overlay');
+  const v = followState;
+  if (!v || !v.song) {
+    overlay.classList.add('waiting');
+    document.getElementById('sync-title').textContent = 'Conectado';
+    document.getElementById('sync-info').textContent = 'Sala ' + (syncRoom || '');
+    return;
+  }
+  overlay.classList.remove('waiting');
+  const song = v.song;
+  const semi = semitonesFor(song, v.keyOffset, v.capoOverride);
+  const curKey = transposeNote(song.key, parseInt(v.keyOffset) || 0);
+  const eff = (typeof v.capoOverride === 'number' && v.capoOverride >= 0) ? v.capoOverride : (parseInt(song.capo) || 0);
+  document.getElementById('sync-title').textContent = song.title + (song.artist ? ' — ' + song.artist : '');
+  document.getElementById('sync-info').textContent = 'Tom: ' + curKey + (eff > 0 ? '  ·  Capo: ' + eff + 'ª casa' : '');
+  const cc = document.getElementById('sync-chord-content');
+  cc.innerHTML = buildChordHTML(song.chords || '', semi);
+  cc.style.fontSize = ((parseInt(v.fontSize) || 14)) + 'px';
+}
+
+function applyFollowScroll(frac) {
+  const w = document.getElementById('sync-sheet-wrap');
+  const max = w.scrollHeight - w.clientHeight;
+  w.scrollTop = (max > 0 ? frac * max : 0);
+}
+
+function joinRoom(code) {
+  if (!syncInit()) { alert('Sincronização não configurada neste app (falta a config do Firebase).'); return; }
+  code = (code || '').trim().toUpperCase();
+  if (code.length < 3) { alert('Digite o código da sala.'); return; }
+  leaveSyncSilent();
+  syncRoom = code;
+  syncRole = 'follower';
+  followState = null;
+  const vref = fbDb.ref('rooms/' + code + '/v');
+  const sref = fbDb.ref('rooms/' + code + '/s');
+  vref.on('value', snap => {
+    followState = snap.val();
+    openSyncOverlay();
+    renderFollow();
+    applyFollowScroll(lastFollowFrac);
+  });
+  sref.on('value', snap => {
+    const d = snap.val();
+    if (d && typeof d.frac === 'number') {
+      lastFollowFrac = d.frac;
+      applyFollowScroll(d.frac);
+    }
+  });
+  syncRefs = [vref, sref];
+  openSyncOverlay();
+  document.getElementById('sync-overlay').classList.add('waiting');
+  updateSyncUI();
+  closeSyncModal();
+}
+
+function createRoom() {
+  if (!syncInit()) { alert('Sincronização não configurada neste app (falta a config do Firebase).'); return; }
+  leaveSyncSilent();
+  syncRoom = randCode();
+  syncRole = 'host';
+  syncPushState(); // envia o estado atual já de cara
+  updateSyncUI();
+  renderSyncModalBody(); // mostra o código
+}
+
+function leaveSyncSilent() {
+  syncRefs.forEach(r => { try { r.off(); } catch (e) {} });
+  syncRefs = [];
+  if (syncRole === 'host' && syncRoom && fbDb) {
+    try { fbDb.ref('rooms/' + syncRoom).remove(); } catch (e) {}
+  }
+  syncRole = null; syncRoom = null; followState = null; lastFollowFrac = 0;
+}
+
+function leaveSync() {
+  leaveSyncSilent();
+  document.getElementById('sync-overlay').classList.remove('active', 'waiting');
+  updateSyncUI();
+}
+
+// ══════════════════════════════════
+// UI: botão + modal
+// ══════════════════════════════════
+function updateSyncUI() {
+  const btn = document.getElementById('sync-btn');
+  const label = document.getElementById('sync-btn-label');
+  if (!btn) return;
+  if (syncRole === 'host') { btn.classList.add('live'); label.textContent = 'Sala ' + syncRoom; }
+  else if (syncRole === 'follower') { btn.classList.add('live'); label.textContent = 'Seguindo'; }
+  else { btn.classList.remove('live'); label.textContent = 'Sincronizar'; }
+}
+
+function openSyncModal() {
+  renderSyncModalBody();
+  document.getElementById('sync-modal-overlay').classList.add('open');
+}
+function closeSyncModal() {
+  document.getElementById('sync-modal-overlay').classList.remove('open');
+}
+
+function renderSyncModalBody() {
+  const body = document.getElementById('sync-modal-body');
+  if (!syncConfigured()) {
+    body.innerHTML = '<p class="sync-status-line">A sincronização ainda não foi configurada.<br>Falta colar a config do Firebase no código (<code>FIREBASE_CONFIG</code>).</p>';
+    return;
+  }
+  if (syncRole === 'host') {
+    body.innerHTML =
+      '<p class="sync-status-line">Você é o <strong>host</strong>. Compartilhe este código:</p>' +
+      '<div class="sync-code-box">' + syncRoom + '</div>' +
+      '<p class="sync-status-line">Quem entrar com esse código vai seguir automaticamente a cifra que você abrir, com tom e rolagem.</p>' +
+      '<button class="btn sync-action-btn" onclick="leaveSync();closeSyncModal()" style="border-color:var(--red);color:var(--red);margin-top:0.6rem">Encerrar sala</button>';
+  } else if (syncRole === 'follower') {
+    body.innerHTML =
+      '<p class="sync-status-line">Seguindo a sala <strong>' + syncRoom + '</strong>.<br>Sua tela espelha o host em tempo real.</p>' +
+      '<button class="btn sync-action-btn" onclick="leaveSync();closeSyncModal()" style="border-color:var(--red);color:var(--red);margin-top:0.6rem">Parar de seguir</button>';
+  } else {
+    body.innerHTML =
+      '<button class="btn btn-primary sync-action-btn" onclick="createRoom()">Criar sala (eu conduzo)</button>' +
+      '<p class="sync-status-line">Gera um código pra seus amigos seguirem sua tela.</p>' +
+      '<div class="sync-divider">ou</div>' +
+      '<div class="form-group">' +
+        '<label>Entrar numa sala</label>' +
+        '<input type="text" id="sync-join-code" placeholder="ex: K7P2" maxlength="6" autocapitalize="characters" style="text-transform:uppercase;font-family:JetBrains Mono,monospace;font-size:1.1rem;letter-spacing:0.15em;text-align:center">' +
+      '</div>' +
+      '<button class="btn sync-action-btn" onclick="joinRoom(document.getElementById(\'sync-join-code\').value)">Entrar e seguir</button>';
+  }
+}
+
+document.getElementById('sync-modal-overlay').addEventListener('click', function (e) {
+  if (e.target === this) closeSyncModal();
+});
+
+// Esconde o botão de sync se o Firebase nem carregou (ex: totalmente offline)
+if (typeof firebase === 'undefined') {
+  const b = document.getElementById('sync-btn');
+  if (b) b.style.display = 'none';
+}
+updateSyncUI();
+</script>
+
 <script>
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
