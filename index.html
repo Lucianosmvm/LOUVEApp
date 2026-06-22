@@ -482,9 +482,9 @@ html, body {
 /* FAB pause button */
 #perf-fab {
   position: fixed;
-  bottom: 1.5rem;
+  bottom: 4.75rem;
   right: 1.25rem;
-  z-index: 510;
+  z-index: 550;
   width: 54px;
   height: 54px;
   border-radius: 50%;
@@ -507,35 +507,29 @@ html, body {
 ══════════════════════════════════ */
 #metronome {
   position: fixed;
-  bottom: 1.1rem;
-  left: 1.1rem;
-  z-index: 530;
-  display: flex;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 540;
+  display: none;
   align-items: center;
-  gap: 0.5rem;
-  background: rgba(40,28,14,0.88);
+  justify-content: center;
+  gap: 0.6rem;
+  background: rgba(40,28,14,0.94);
   color: #fff;
-  border-radius: 999px;
-  padding: 0.35rem 0.5rem 0.35rem 0.6rem;
-  box-shadow: 0 4px 18px rgba(60,35,10,0.35);
+  border-radius: 0;
+  padding: 0.5rem 0.9rem;
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  box-shadow: 0 -4px 18px rgba(60,35,10,0.35);
   backdrop-filter: blur(6px);
   font-family: 'DM Sans', sans-serif;
-  opacity: 0.55;
-  transition: opacity 0.2s, transform 0.15s;
+  opacity: 1;
+  transition: transform 0.15s;
   user-select: none;
 }
-#metronome:hover, #metronome.running { opacity: 1; }
-#metronome.collapsed { padding: 0; background: none; box-shadow: none; opacity: 0.5; }
-#metronome.collapsed:hover { opacity: 0.85; }
-#metronome.collapsed > *:not(#metro-fab) { display: none !important; }
-#metro-fab {
-  width: 42px; height: 42px; border-radius: 50%;
-  background: linear-gradient(135deg, #b5813a, #c89a3a);
-  border: none; color: #fff; font-size: 1.1rem; cursor: pointer;
-  display: none; align-items: center; justify-content: center;
-  box-shadow: 0 3px 14px rgba(181,129,58,0.4);
-}
-#metronome.collapsed #metro-fab { display: flex; }
+#metronome.visible { display: flex; }
+#metro-fab { display: none !important; }
+#metro-close { display: none !important; }
 /* beat dots */
 #metro-beats { display: flex; gap: 0.28rem; }
 .metro-dot {
@@ -834,6 +828,115 @@ html, body {
 </head>
 <body class="tab-setlist">
 
+<!-- ══════════════════════════════════
+     TELA DE ACESSO (senha)
+══════════════════════════════════ -->
+<style>
+#gate-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  display: none; align-items: center; justify-content: center;
+  background: #1a120a;
+  font-family: 'DM Sans', sans-serif;
+  padding: 1.5rem;
+}
+#gate-overlay.locked { display: flex; }
+html.gate-locked, body.gate-locked { overflow: hidden; }
+#gate-box {
+  width: 100%; max-width: 340px;
+  background: rgba(40,28,14,0.6);
+  border: 1px solid rgba(200,154,58,0.35);
+  border-radius: 18px;
+  padding: 2rem 1.6rem;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+#gate-box h2 {
+  font-family: 'Cormorant Garamond', serif;
+  color: #f3e7d2; font-size: 1.8rem; margin: 0 0 0.3rem;
+}
+#gate-box p { color: #c9b48f; font-size: 0.85rem; margin: 0 0 1.3rem; }
+#gate-input {
+  width: 100%; box-sizing: border-box;
+  padding: 0.75rem 0.9rem; border-radius: 10px;
+  border: 1px solid rgba(200,154,58,0.35);
+  background: rgba(0,0,0,0.25); color: #fff;
+  font-size: 1rem; text-align: center; letter-spacing: 0.05em;
+  outline: none;
+}
+#gate-input:focus { border-color: #c89a3a; }
+#gate-btn {
+  width: 100%; margin-top: 0.9rem;
+  padding: 0.75rem; border-radius: 10px; border: none;
+  background: linear-gradient(135deg, #b5813a, #c89a3a);
+  color: #fff; font-size: 1rem; font-weight: 700; cursor: pointer;
+}
+#gate-btn:active { transform: scale(0.98); }
+#gate-err { color: #e8907f; font-size: 0.82rem; min-height: 1.1em; margin-top: 0.7rem; }
+</style>
+<div id="gate-overlay">
+  <div id="gate-box">
+    <h2>✦ Louva+</h2>
+    <p>Digite a senha para acessar</p>
+    <input type="password" id="gate-input" placeholder="senha" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <button id="gate-btn">Entrar</button>
+    <div id="gate-err"></div>
+  </div>
+</div>
+<script>
+(function () {
+  // SHA-256 da senha de acesso. Para trocar a senha, gere um novo hash:
+  //   no console do navegador rode:  await gateHash('SUA_NOVA_SENHA')
+  // e cole o resultado abaixo.
+  const ACCESS_HASH = '97c152c8f244fccb44e70b623e348d64e92f6f1d9ee576dd04cfdc21e8e15794';
+  const UNLOCK_KEY = 'louva_unlocked';
+
+  async function sha256(txt) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(txt));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  // helper exposto p/ gerar hash de uma nova senha no console
+  window.gateHash = sha256;
+
+  const overlay = document.getElementById('gate-overlay');
+  const input = document.getElementById('gate-input');
+  const btn = document.getElementById('gate-btn');
+  const err = document.getElementById('gate-err');
+
+  function lock() {
+    overlay.classList.add('locked');
+    document.documentElement.classList.add('gate-locked');
+    document.body.classList.add('gate-locked');
+    setTimeout(() => input.focus(), 60);
+  }
+  function unlock() {
+    overlay.classList.remove('locked');
+    document.documentElement.classList.remove('gate-locked');
+    document.body.classList.remove('gate-locked');
+  }
+
+  if (localStorage.getItem(UNLOCK_KEY) === ACCESS_HASH) {
+    unlock();
+  } else {
+    lock();
+  }
+
+  async function tryUnlock() {
+    const h = await sha256(input.value);
+    if (h === ACCESS_HASH) {
+      localStorage.setItem(UNLOCK_KEY, ACCESS_HASH);
+      err.textContent = '';
+      unlock();
+    } else {
+      err.textContent = 'Senha incorreta';
+      input.value = '';
+      input.focus();
+    }
+  }
+  btn.addEventListener('click', tryUnlock);
+  input.addEventListener('keydown', e => { if (e.key === 'Enter') tryUnlock(); });
+})();
+</script>
+
 <div id="root">
   <!-- HEADER -->
   <header id="app-header">
@@ -1011,7 +1114,7 @@ html, body {
 <!-- ══════════════════════════════════
      METRÔNOMO (flutuante)
 ══════════════════════════════════ -->
-<div id="metronome" class="collapsed">
+<div id="metronome">
   <button id="metro-fab" onclick="expandMetro()" title="Metrônomo">♩</button>
   <div id="metro-beats">
     <div class="metro-dot" data-beat="0">1</div>
@@ -1518,6 +1621,7 @@ function renderSheet() {
   if (activeIdx === -1 || !songs[activeIdx]) {
     document.getElementById('empty-state').style.display = '';
     document.getElementById('chord-display').style.display = 'none';
+    updateMetroVisibility();
     return;
   }
 
@@ -1543,6 +1647,7 @@ function renderSheet() {
   const cc = document.getElementById('chord-content');
   cc.innerHTML = buildChordHTML(song.chords || '');
   cc.style.fontSize = fontSize + 'px';
+  updateMetroVisibility();
 }
 
 // ══════════════════════════════════
@@ -1750,6 +1855,10 @@ function enterPerformanceMode() {
   const fab = document.getElementById('perf-fab');
   fab.textContent = '▶'; fab.classList.add('paused');
   updatePerfNavButtons();
+  // Puxa o BPM da cifra atual e inicia o metrônomo
+  const song = getSongs()[activeIdx];
+  if (song && song.bpm) { setMetroSongBpm(song.bpm); if (!metroOn) startMetro(); }
+  updateMetroVisibility();
 }
 
 function perfStep(d) {
@@ -1768,6 +1877,8 @@ function perfStep(d) {
   renderSongList();
   renderSheet();
   updatePerfNavButtons();
+  // Sincroniza o metrônomo com o BPM da nova cifra
+  if (sel && sel.bpm) { setMetroSongBpm(sel.bpm); if (metroOn) { stopMetro(); startMetro(); } }
   syncOnChange();
 }
 
@@ -1802,6 +1913,7 @@ function exitPerformanceMode() {
   stopPerfScroll();
   document.getElementById('perf-overlay').classList.remove('active');
   try { document.fullscreenElement && document.exitFullscreen(); } catch(e) {}
+  updateMetroVisibility();
 }
 
 let lastPerfTs = null;
@@ -1851,6 +1963,7 @@ function switchTab(tab) {
   document.body.className = 'tab-' + tab;
   document.getElementById('tab-setlist-btn').classList.toggle('active', tab === 'setlist');
   document.getElementById('tab-cifra-btn').classList.toggle('active', tab === 'cifra');
+  updateMetroVisibility();
 }
 
 // ══════════════════════════════════
@@ -2482,8 +2595,18 @@ function setMetroSongBpm(bpm) {
   if (n >= 30 && n <= 300) { metroBpm = n; updateMetroBpm(); }
 }
 
-function expandMetro() { document.getElementById('metronome').classList.remove('collapsed'); }
-function collapseMetro() { stopMetro(); document.getElementById('metronome').classList.add('collapsed'); }
+function expandMetro() { updateMetroVisibility(); }
+function collapseMetro() { stopMetro(); }
+
+// Footer só aparece com cifra na tela (ou modo performance)
+function updateMetroVisibility() {
+  const m = document.getElementById('metronome');
+  const perfActive = document.getElementById('perf-overlay').classList.contains('active');
+  const songs = getSongs();
+  const songShown = activeIdx !== -1 && !!songs[activeIdx];
+  const onSetlistTab = document.body.classList.contains('tab-setlist');
+  m.classList.toggle('visible', perfActive || (songShown && !onSetlistTab));
+}
 
 // ══════════════════════════════════
 // INIT
