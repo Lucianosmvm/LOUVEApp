@@ -615,7 +615,7 @@ html, body {
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
-#modal-overlay, #group-modal-overlay, #copy-modal-overlay {
+#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
@@ -628,7 +628,7 @@ html, body {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open { opacity: 1; pointer-events: all; }
 
 .modal {
   background: var(--surface);
@@ -645,7 +645,8 @@ html, body {
 }
 #modal-overlay.open .modal,
 #group-modal-overlay.open .modal,
-#copy-modal-overlay.open .modal { transform: translateY(0); }
+#copy-modal-overlay.open .modal,
+#sync-modal-overlay.open .modal { transform: translateY(0); }
 
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
 
