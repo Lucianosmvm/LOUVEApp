@@ -942,8 +942,14 @@ html.gate-locked, body.gate-locked { overflow: hidden; }
   <header id="app-header">
     <h1>✦ Louva<span class="plus">+</span> <span id="song-count"></span></h1>
     <div class="header-btns">
-      <button class="btn" id="sync-btn" onclick="openSyncModal()" title="Sincronizar com outro celular">
-        <span class="btn-icon-sym">⇆</span> <span id="sync-btn-label">Sincronizar</span>
+      <button class="btn" onclick="gdriveSync()" title="Buscar backup no Google Drive e atualizar">
+        <span class="btn-icon-sym">⟳</span> Sincronizar
+      </button>
+      <button class="btn" onclick="gdriveBackup()" title="Enviar dados para o Google Drive">
+        <span class="btn-icon-sym">☁</span> Backup
+      </button>
+      <button class="btn" id="sync-btn" onclick="openSyncModal()" title="Espelhar cifra ao vivo em outro celular">
+        <span class="btn-icon-sym">⇆</span> <span id="sync-btn-label">Ao Vivo</span>
       </button>
       <button class="btn" onclick="exportPlaylist()" title="Exportar playlist">
         <span class="btn-icon-sym">⬇</span> Exportar
@@ -1272,6 +1278,9 @@ Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea
 <!-- Firebase (sincronização em tempo real). Carrega só online; app funciona offline sem isso. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+
+<!-- Google Identity Services (login p/ backup no Google Drive). Só carrega online. -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 
 <script>
 // ══════════════════════════════════
@@ -2870,6 +2879,145 @@ if (typeof firebase === 'undefined') {
   if (b) b.style.display = 'none';
 }
 updateSyncUI();
+</script>
+
+<!-- ══════════════════════════════════
+     BACKUP NO GOOGLE DRIVE
+══════════════════════════════════ -->
+<script>
+// ⚠️ COLE AQUI o Client ID OAuth do seu projeto Google Cloud.
+//    console.cloud.google.com → APIs e Serviços → Credenciais →
+//    Criar credenciais → ID do cliente OAuth → Aplicativo da Web.
+//    Ative também a "Google Drive API" na biblioteca. Sem isso o backup fica desativado.
+const GDRIVE_CLIENT_ID = '876407401402-2510pgmjtc87cvf0j0t0k3inj3m775tb.apps.googleusercontent.com';
+const GDRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const GDRIVE_FILE_NAME = 'louva-backup.json';
+
+let gdriveTokenClient = null;
+let gdriveToken = null;
+
+function gdriveConfigured() {
+  return GDRIVE_CLIENT_ID.indexOf('COLE_SEU_CLIENT_ID') === -1
+    && GDRIVE_CLIENT_ID.indexOf('.apps.googleusercontent.com') !== -1;
+}
+
+function gdriveInit() {
+  if (gdriveTokenClient) return true;
+  if (!gdriveConfigured()) return false;
+  if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) return false;
+  gdriveTokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: GDRIVE_CLIENT_ID,
+    scope: GDRIVE_SCOPE,
+    callback: () => {} // definido por chamada em gdriveAuth
+  });
+  return true;
+}
+
+// Pede (ou reusa) um token de acesso ao Drive.
+function gdriveAuth() {
+  return new Promise((resolve, reject) => {
+    if (!gdriveInit()) { reject(new Error('Backup no Drive não configurado (falta o Client ID) ou você está offline.')); return; }
+    gdriveTokenClient.callback = (resp) => {
+      if (resp && resp.error) { reject(new Error('Login no Google cancelado ou negado.')); return; }
+      gdriveToken = resp.access_token;
+      resolve(gdriveToken);
+    };
+    // Se já temos token, tenta sem re-mostrar a tela de consentimento.
+    gdriveTokenClient.requestAccessToken({ prompt: gdriveToken ? '' : 'consent' });
+  });
+}
+
+// Procura o arquivo de backup já existente no Drive (criado por este app).
+async function gdriveFindFile(token) {
+  const q = encodeURIComponent(`name='${GDRIVE_FILE_NAME}' and trashed=false`);
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (!r.ok) throw new Error('Falha ao consultar o Drive (' + r.status + ').');
+  const d = await r.json();
+  return d.files && d.files[0];
+}
+
+// BACKUP: envia os dados locais para o Drive (cria ou atualiza o mesmo arquivo).
+async function gdriveBackup() {
+  try {
+    driveToast('Enviando backup…', 'wait');
+    const token = await gdriveAuth();
+    const existing = await gdriveFindFile(token);
+    const content = JSON.stringify({ groups, activeGroupId, savedAt: Date.now() });
+    let r;
+    if (existing) {
+      r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, {
+        method: 'PATCH',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+        body: content
+      });
+    } else {
+      const boundary = 'louvaBnd' + Date.now();
+      const metadata = { name: GDRIVE_FILE_NAME, mimeType: 'application/json' };
+      const body =
+        `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n` +
+        JSON.stringify(metadata) +
+        `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n` +
+        content +
+        `\r\n--${boundary}--`;
+      r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` },
+        body
+      });
+    }
+    if (!r.ok) throw new Error('Falha ao enviar (' + r.status + ').');
+    driveToast('Backup salvo no Drive ✓', 'ok');
+  } catch (e) {
+    driveToast(e.message || 'Erro no backup.', 'err');
+  }
+}
+
+// SINCRONIZAR: baixa o backup do Drive e substitui os dados locais.
+async function gdriveSync() {
+  try {
+    driveToast('Buscando no Drive…', 'wait');
+    const token = await gdriveAuth();
+    const f = await gdriveFindFile(token);
+    if (!f) { driveToast('Nenhum backup encontrado no Drive.', 'err'); return; }
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + token }
+    });
+    if (!r.ok) throw new Error('Falha ao baixar (' + r.status + ').');
+    const d = await r.json();
+    if (!d.groups || !Array.isArray(d.groups)) throw new Error('Backup inválido no Drive.');
+    groups = d.groups;
+    activeGroupId = d.activeGroupId || (groups[0] ? groups[0].id : null);
+    activeIdx = -1;
+    save();
+    renderGroupsBar();
+    renderSongList();
+    renderSheet();
+    driveToast('Sincronizado do Drive ✓', 'ok');
+  } catch (e) {
+    driveToast(e.message || 'Erro ao sincronizar.', 'err');
+  }
+}
+
+// Toast simples (canto inferior). Cria o elemento sob demanda.
+let _driveToastTimer = null;
+function driveToast(msg, kind) {
+  let t = document.getElementById('drive-toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'drive-toast';
+    document.body.appendChild(t);
+  }
+  const bg = kind === 'ok' ? '#2e7d32' : kind === 'err' ? '#c0524a' : '#333';
+  t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:9999;'
+    + 'padding:10px 16px;border-radius:10px;font:500 0.85rem/1.3 system-ui,sans-serif;color:#fff;'
+    + 'box-shadow:0 6px 24px rgba(0,0,0,0.25);max-width:80vw;text-align:center;pointer-events:none;'
+    + 'transition:opacity .2s;opacity:1;background:' + bg;
+  t.textContent = msg;
+  if (_driveToastTimer) clearTimeout(_driveToastTimer);
+  if (kind !== 'wait') _driveToastTimer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+}
 </script>
 
 <script>

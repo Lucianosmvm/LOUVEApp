@@ -1,4 +1,4 @@
-const CACHE = 'louva-plus-v7';
+const CACHE = 'louva-plus-v8';
 
 // Tudo que precisa funcionar offline
 const ASSETS = [
