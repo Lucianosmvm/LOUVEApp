@@ -92,7 +92,14 @@ html, body {
 .header-btns .btn .btn-icon-sym {
   font-size: 0.9rem;
   line-height: 1;
+  white-space: nowrap;
 }
+/* Drive: baixar (verde) x salvar (âmbar). No celular o texto do botão some,
+   então a seta e a cor são o único jeito de diferenciar os dois. */
+.header-btns .btn.btn-drive-get { background: rgba(110,185,140,0.30); border-color: rgba(160,225,185,0.55); }
+.header-btns .btn.btn-drive-get:hover { background: rgba(110,185,140,0.48); border-color: rgba(180,235,200,0.75); }
+.header-btns .btn.btn-drive-put { background: rgba(232,168,64,0.32); border-color: rgba(255,208,120,0.60); }
+.header-btns .btn.btn-drive-put:hover { background: rgba(232,168,64,0.50); border-color: rgba(255,220,150,0.80); }
 
 /* ══════════════════════════════════
    GROUPS BAR
@@ -668,7 +675,7 @@ html, body {
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
-#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay {
+#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
@@ -681,7 +688,7 @@ html, body {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open { opacity: 1; pointer-events: all; }
 
 .modal {
   background: var(--surface);
@@ -699,7 +706,8 @@ html, body {
 #modal-overlay.open .modal,
 #group-modal-overlay.open .modal,
 #copy-modal-overlay.open .modal,
-#sync-modal-overlay.open .modal { transform: translateY(0); }
+#sync-modal-overlay.open .modal,
+#pin-modal-overlay.open .modal { transform: translateY(0); }
 
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
 
@@ -833,11 +841,11 @@ html, body {
   <header id="app-header">
     <h1>✦ Louva<span class="plus">+</span> <span id="song-count"></span></h1>
     <div class="header-btns">
-      <button class="btn" onclick="gdriveSync()" title="Buscar backup no Google Drive e atualizar">
-        <span class="btn-icon-sym">⟳</span> Sincronizar
+      <button class="btn btn-drive-get" onclick="gdriveSync()" title="BAIXAR do Drive: substitui as músicas deste aparelho pelo backup do Drive">
+        <span class="btn-icon-sym">☁↓</span> Baixar
       </button>
-      <button class="btn" onclick="gdriveBackup()" title="Enviar dados para o Google Drive">
-        <span class="btn-icon-sym">☁</span> Backup
+      <button class="btn btn-drive-put" onclick="gdriveBackup()" title="SALVAR no Drive: substitui o backup do Drive pelas músicas deste aparelho (pede senha)">
+        <span class="btn-icon-sym">☁↑</span> Salvar
       </button>
       <button class="btn" id="sync-btn" onclick="openSyncModal()" title="Espelhar cifra ao vivo em outro celular">
         <span class="btn-icon-sym">⇆</span> <span id="sync-btn-label">Ao Vivo</span>
@@ -1128,6 +1136,36 @@ Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea
     <div class="modal-footer">
       <button class="btn" onclick="closeGroupModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveGroup()" style="padding:0.5rem 1.25rem">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL (senha para salvar no Drive)
+══════════════════════════════════ -->
+<div id="pin-modal-overlay">
+  <div class="modal" style="max-height:60dvh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>☁↑ Salvar no Drive</h3>
+      <button class="modal-close" onclick="closePinModal(false)">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:0.82rem;color:var(--text-muted);line-height:1.5;margin:0">
+        Isto <strong>substitui</strong> o backup do Drive pelas músicas deste aparelho.
+        Digite a senha para confirmar.
+      </p>
+      <div class="form-group">
+        <label>Senha</label>
+        <input type="password" id="inp-drive-pin" inputmode="numeric" autocomplete="off"
+               autocapitalize="off" spellcheck="false" placeholder="senha"
+               onkeydown="if(event.key==='Enter'){event.preventDefault();confirmPinModal();}">
+      </div>
+      <div id="pin-err" style="color:#c0392b;font-size:0.8rem;min-height:1em"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closePinModal(false)">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmPinModal()" style="padding:0.5rem 1.25rem">Salvar no Drive</button>
     </div>
   </div>
 </div>
@@ -2829,8 +2867,43 @@ async function gdriveFindFile(token) {
   return d.files && d.files[0];
 }
 
+// Senha pedida antes de SALVAR no Drive, pra não sobrescrever o backup sem querer.
+const DRIVE_SAVE_PIN = '1234';
+let _pinResolve = null;
+
+function askDrivePin() {
+  return new Promise(resolve => {
+    _pinResolve = resolve;
+    const inp = document.getElementById('inp-drive-pin');
+    inp.value = '';
+    document.getElementById('pin-err').textContent = '';
+    document.getElementById('pin-modal-overlay').classList.add('open');
+    setTimeout(() => inp.focus(), 80);
+  });
+}
+
+function closePinModal(ok) {
+  document.getElementById('pin-modal-overlay').classList.remove('open');
+  const r = _pinResolve;
+  _pinResolve = null;
+  if (r) r(!!ok);
+}
+
+function confirmPinModal() {
+  const inp = document.getElementById('inp-drive-pin');
+  if (inp.value.trim() === DRIVE_SAVE_PIN) {
+    document.getElementById('pin-err').textContent = '';
+    closePinModal(true);
+  } else {
+    document.getElementById('pin-err').textContent = 'Senha incorreta';
+    inp.value = '';
+    inp.focus();
+  }
+}
+
 // BACKUP: envia os dados locais para o Drive (cria ou atualiza o mesmo arquivo).
 async function gdriveBackup() {
+  if (!(await askDrivePin())) return;
   try {
     driveToast('Enviando backup…', 'wait');
     const token = await gdriveAuth();
