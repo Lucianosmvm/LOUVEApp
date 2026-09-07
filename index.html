@@ -594,6 +594,23 @@ html, body {
   animation: syncPulse 1.6s ease-in-out infinite;
 }
 @keyframes syncPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* Busca no Cifra Club: feedback ao tocar numa musica. O status fica no topo do
+   modal e a lista rola, entao quem toca numa linha la embaixo nao veria nada
+   acontecer. Por isso o retorno vem na propria linha tocada. */
+@keyframes ccSpin { to { transform: rotate(360deg); } }
+.cc-spinner {
+  display: inline-block; width: 14px; height: 14px; flex-shrink: 0;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: ccSpin 0.7s linear infinite;
+}
+.cc-row { transition: background 0.15s, opacity 0.15s; }
+.cc-row:active { background: var(--surface2); }
+#cc-results.cc-loading .cc-row { opacity: 0.35; pointer-events: none; }
+#cc-results.cc-loading .cc-row.cc-active { opacity: 1; background: var(--accent-light); }
+.cc-sub-load { color: var(--accent-deep); font-weight: 600; }
 #sync-sheet-wrap {
   flex: 1;
   overflow-y: auto;
@@ -2974,6 +2991,10 @@ async function ccSearch() {
 function ccRenderResults(list) {
   const box = document.getElementById('cc-results');
   box.innerHTML = '';
+  // Se veio de uma busca feita no meio de um download, o container ainda estaria
+  // com a classe de carregando: a lista nova apareceria apagada e sem aceitar
+  // toque, sem nada explicando o porque.
+  box.classList.remove('cc-loading');
   if (!list.length) { ccSetStatus('Nada encontrado.'); return; }
   ccSetStatus('Toque numa m\u00fasica pra baixar e salvar no app.');
   list.slice(0, 20).forEach(d => {
@@ -2992,18 +3013,51 @@ function ccRenderResults(list) {
     ico.textContent = '\u2193';
     ico.style.cssText = 'font-size:0.95rem;color:var(--text-muted);flex-shrink:0';
     row.appendChild(txt); row.appendChild(ico);
-    row.onclick = () => ccImport(d);
+    row.className = 'cc-row';
+    row.onclick = () => ccImport(d, row, ico, art);
     box.appendChild(row);
   });
 }
 
-async function ccImport(d) {
-  if (ccBusy) return;
+// row/ico/sub sao a linha tocada: o retorno visual vai nela, porque o texto de
+// status fica no topo do modal e some da tela quando a lista esta rolada.
+async function ccImport(d, row, ico, sub) {
+  if (ccBusy) {
+    // Nunca sair daqui em silencio: sem aviso parece que o toque nao pegou.
+    ccSetStatus('Espere o download atual terminar antes de tocar em outra.', 'err');
+    return;
+  }
   ccBusy = true;
+
+  const box = document.getElementById('cc-results');
+  const subOriginal = sub ? sub.textContent : '';
+  const icoOriginal = ico ? ico.textContent : '';
+
+  if (box) box.classList.add('cc-loading');
+  if (row) row.classList.add('cc-active');
+  if (ico) { ico.textContent = ''; ico.className = 'cc-spinner'; }
+  if (sub) sub.classList.add('cc-sub-load');
+
+  // Escreve a etapa nos dois lugares: na linha (onde o dedo esta) e no status do
+  // topo. Textos diferentes: na linha o espaco e curto e o nome da musica ja
+  // aparece logo acima; no topo cabe a frase inteira.
+  const etapa = (naLinha, noTopo) => {
+    if (sub) sub.textContent = naLinha;
+    ccSetStatus(noTopo);
+  };
+
+  const restaurar = () => {
+    if (box) box.classList.remove('cc-loading');
+    if (row) row.classList.remove('cc-active');
+    if (ico) { ico.className = ''; ico.textContent = icoOriginal; ico.style.cssText = 'font-size:0.95rem;color:var(--text-muted);flex-shrink:0'; }
+    if (sub) { sub.classList.remove('cc-sub-load'); sub.textContent = subOriginal; }
+  };
+
   const url = CC_SITE + d.dns + '/' + d.url + '/';
   let html = null, erro = 'nenhum proxy respondeu';
   for (let i = 0; i < CC_PROXIES.length; i++) {
-    ccSetStatus('Baixando "' + d.txt + '"\u2026 (tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + ')');
+    etapa('baixando\u2026 (tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + ')',
+          'Baixando "' + d.txt + '"\u2026 tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + '.');
     try {
       const ctl = new AbortController();
       const to = setTimeout(() => ctl.abort(), 20000);
@@ -3018,10 +3072,14 @@ async function ccImport(d) {
       erro = 'proxy ' + (i + 1) + ': ' + (e.name === 'AbortError' ? 'demorou demais' : (e.message || e));
     }
   }
-  ccBusy = false;
-  if (!html) { ccFallback(d, url, erro); return; }
 
-  const song = ccParse(html, d.txt, d.art);
+  if (html) etapa('lendo a cifra\u2026', 'Lendo a cifra de "' + d.txt + '"\u2026');
+  const song = html ? ccParse(html, d.txt, d.art) : null;
+
+  ccBusy = false;
+  restaurar();
+
+  if (!html) { ccFallback(d, url, erro); return; }
   if (!song) { ccFallback(d, url, 'baixou, mas n\u00e3o achei a cifra na p\u00e1gina'); return; }
 
   const songs = getSongs();
