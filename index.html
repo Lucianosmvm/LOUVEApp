@@ -611,6 +611,11 @@ html, body {
 #cc-results.cc-loading .cc-row { opacity: 0.35; pointer-events: none; }
 #cc-results.cc-loading .cc-row.cc-active { opacity: 1; background: var(--accent-light); }
 .cc-sub-load { color: var(--accent-deep); font-weight: 600; }
+.cc-ver-btn.ativo {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
 #sync-sheet-wrap {
   flex: 1;
   overflow-y: auto;
@@ -1177,6 +1182,16 @@ Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea
                autocomplete="off" autocapitalize="off" spellcheck="false"
                oninput="ccOnInput()"
                onkeydown="if(event.key===&#39;Enter&#39;){event.preventDefault();ccSearch();}">
+      </div>
+      <div class="form-group">
+        <label>Versão da cifra</label>
+        <div id="cc-versao" style="display:flex;gap:0.4rem">
+          <button type="button" class="btn cc-ver-btn" data-versao="original" onclick="ccSetVersao('original')" style="flex:1;padding:0.45rem;font-size:0.78rem">Original</button>
+          <button type="button" class="btn cc-ver-btn" data-versao="simplificada" onclick="ccSetVersao('simplificada')" style="flex:1;padding:0.45rem;font-size:0.78rem">Simplificada</button>
+        </div>
+        <div style="font-size:0.72rem;color:var(--text-muted);margin-top:0.35rem;line-height:1.4">
+          A simplificada troca acordes complexos por versões fáceis. Se a música não tiver uma, o app baixa a original e avisa.
+        </div>
       </div>
       <div id="cc-status" style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;min-height:1.1em"></div>
       <div id="cc-results"></div>
@@ -2922,27 +2937,79 @@ async function gdriveFindFile(token) {
 //
 // BAIXAR A CIFRA nao funciona direto: www.cifraclub.com.br nao manda header CORS
 // nenhum, entao o navegador deixa o pedido sair mas proibe o app de ler a
-// resposta. Por isso passa por um proxy publico. Esses proxies caem e limitam
-// bastante (num mesmo dia de teste um respondeu 429 e o outro 520), entao a lista
-// e tentada em ordem ate uma funcionar. Se todas falharem, cai no fluxo manual de
-// abrir o site e colar, que o parser de colagem ja resolve.
+// resposta. Por isso precisa passar por um proxy.
 //
-// PRA FICAR 100% CONFIAVEL: troque CC_PROXIES por um proxy seu (ex: um Cloudflare
-// Worker), ai nao depende de servidor de terceiro.
+// ATENCAO, o estado real disso (medido, nao suposto): proxy publico aqui e
+// pouco confiavel. Testando os cinco candidatos a partir de uma origem https
+// real, todos falharam na mesma rodada (522, 522, 429, 403, 429). O allorigins
+// /get e o unico que, quando esta de pe, devolve CORS correto ecoando a origem
+// do app; o /raw dele responde 500 e o cors.lol nao manda header CORS nenhum
+// pra origem real (so funciona de origem nula, tipo arquivo local, o que engana
+// em teste e nao serve em producao).
+//
+// Ou seja: em dia bom baixa sozinho, em dia ruim cai no fluxo manual de abrir o
+// site e colar, que o parser de colagem ja resolve. O conserto de verdade e
+// trocar CC_PROXIES por um proxy proprio (um Cloudflare Worker de ~20 linhas no
+// plano gratis), que tira a dependencia de terceiro e o rate limit.
+//
+// Formato de cada proxy: nome (pra mensagem de erro), url (monta o endereco) e
+// extrai (le a resposta, que num caso e JSON e no outro e o HTML cru).
 const CC_SEARCH_URL = 'https://solr.sscdn.co/cc/api/?q=';
 const CC_SITE = 'https://www.cifraclub.com.br/';
+const CC_TIMEOUT = 8000; // os proxies que funcionam respondem em 2-6s; alem disso e cadaver
 const CC_PROXIES = [
-  u => 'https://api.cors.lol/?url=' + encodeURIComponent(u),
-  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
-  u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)
+  {
+    nome: 'allorigins',
+    url: u => 'https://api.allorigins.win/get?url=' + encodeURIComponent(u),
+    extrai: async r => { const j = await r.json(); return (j && j.contents) || ''; }
+  },
+  {
+    nome: 'codetabs',
+    url: u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u),
+    extrai: r => r.text()
+  },
+  {
+    nome: 'corsfix',
+    url: u => 'https://proxy.corsfix.com/?' + u,
+    extrai: r => r.text()
+  }
 ];
 
 let ccTimer = null;
 let ccLastQuery = '';
 let ccBusy = false;
 
+// Versao da cifra a baixar. 'original' e o padrao porque e o que o proprio site
+// abre e o que o app ja baixava antes. A escolha fica guardada entre sessoes.
+let ccVersao = 'original';
+try {
+  const v = localStorage.getItem('louva_cc_versao');
+  if (v === 'simplificada' || v === 'original') ccVersao = v;
+} catch (e) {}
+
+function ccSetVersao(v) {
+  ccVersao = v;
+  try { localStorage.setItem('louva_cc_versao', v); } catch (e) {}
+  ccRenderVersao();
+}
+
+function ccRenderVersao() {
+  const bts = document.querySelectorAll('#cc-versao .cc-ver-btn');
+  bts.forEach(b => b.classList.toggle('ativo', b.getAttribute('data-versao') === ccVersao));
+}
+
+// O canonical da pagina diz qual versao veio de fato. Serve pra pegar o caso em
+// que a musica nao tem simplificada: o site redireciona pra original em vez de
+// dar erro, e sem isso o app salvaria a original achando que era a simplificada.
+function ccVersaoDoHtml(htmlText) {
+  const m = htmlText.match(/<link[^>]+rel="canonical"[^>]+href="([^"]*)"/i);
+  if (!m) return null;
+  return /simplificada\.html/i.test(m[1]) ? 'simplificada' : 'original';
+}
+
 function openCcModal() {
   document.getElementById('cc-modal-overlay').classList.add('open');
+  ccRenderVersao();
   const i = document.getElementById('inp-cc-search');
   i.value = '';
   document.getElementById('cc-results').innerHTML = '';
@@ -3053,23 +3120,39 @@ async function ccImport(d, row, ico, sub) {
     if (sub) { sub.classList.remove('cc-sub-load'); sub.textContent = subOriginal; }
   };
 
-  const url = CC_SITE + d.dns + '/' + d.url + '/';
-  let html = null, erro = 'nenhum proxy respondeu';
-  for (let i = 0; i < CC_PROXIES.length; i++) {
-    etapa('baixando\u2026 (tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + ')',
-          'Baixando "' + d.txt + '"\u2026 tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + '.');
-    try {
-      const ctl = new AbortController();
-      const to = setTimeout(() => ctl.abort(), 20000);
-      const r = await fetch(CC_PROXIES[i](url), { signal: ctl.signal });
-      clearTimeout(to);
-      if (!r.ok) { erro = 'proxy ' + (i + 1) + ' devolveu HTTP ' + r.status; continue; }
-      const body = await r.text();
-      if (body.indexOf('<pre') === -1) { erro = 'proxy ' + (i + 1) + ' devolveu p\u00e1gina sem cifra'; continue; }
-      html = body;
-      break;
-    } catch (e) {
-      erro = 'proxy ' + (i + 1) + ': ' + (e.name === 'AbortError' ? 'demorou demais' : (e.message || e));
+  const base = CC_SITE + d.dns + '/' + d.url + '/';
+  const url = base;
+  // Se pediu simplificada, tenta ela primeiro e cai pra original se nao existir.
+  const alvos = (ccVersao === 'simplificada')
+    ? [{ href: base + 'simplificada.html', rotulo: 'simplificada' }, { href: base, rotulo: 'original' }]
+    : [{ href: base, rotulo: 'original' }];
+
+  let html = null, erro = 'nenhum proxy respondeu', veio = null, algumRespondeu = false;
+  for (let a = 0; a < alvos.length && !html; a++) {
+    const alvo = alvos[a];
+    // Se nenhum proxy deu sinal de vida no primeiro alvo, os proxies (ou a rede)
+    // estao fora. Tentar o segundo alvo so faria esperar o dobro pelo mesmo nada.
+    if (a > 0 && !algumRespondeu) break;
+    const qual = alvo.rotulo;
+    for (let i = 0; i < CC_PROXIES.length; i++) {
+      const px = CC_PROXIES[i];
+      etapa('baixando ' + qual + '\u2026 (tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + ')',
+            'Baixando a ' + qual + ' de "' + d.txt + '"\u2026 tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + '.');
+      try {
+        const ctl = new AbortController();
+        const to = setTimeout(() => ctl.abort(), CC_TIMEOUT);
+        const r = await fetch(px.url(alvo.href), { signal: ctl.signal });
+        clearTimeout(to);
+        if (!r.ok) { erro = px.nome + ' devolveu HTTP ' + r.status; continue; }
+        algumRespondeu = true;
+        const body = await px.extrai(r);
+        if (!body || body.indexOf('<pre') === -1) { erro = px.nome + ' devolveu p\u00e1gina sem cifra'; continue; }
+        html = body;
+        veio = ccVersaoDoHtml(body) || alvo.rotulo;
+        break;
+      } catch (e) {
+        erro = px.nome + ': ' + (e.name === 'AbortError' ? 'demorou demais' : (e.message || e));
+      }
     }
   }
 
@@ -3088,7 +3171,11 @@ async function ccImport(d, row, ico, sub) {
   renderSongList();
   selectSong(songs.length - 1);
   closeCcModal();
-  driveToast('"' + song.title + '" salva no app \u2713', 'ok');
+  const pediuSimp = (ccVersao === 'simplificada');
+  const msg = (pediuSimp && veio === 'original')
+    ? '"' + song.title + '" salva \u2014 s\u00f3 tem a original'
+    : '"' + song.title + '" salva (' + (veio === 'simplificada' ? 'simplificada' : 'original') + ') \u2713';
+  driveToast(msg, 'ok');
 }
 
 // Le o HTML da pagina do Cifra Club e monta o objeto de musica do app.
