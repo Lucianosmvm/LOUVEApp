@@ -675,7 +675,7 @@ html, body {
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
-#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay {
+#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
@@ -688,7 +688,7 @@ html, body {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open { opacity: 1; pointer-events: all; }
 
 .modal {
   background: var(--surface);
@@ -707,7 +707,8 @@ html, body {
 #group-modal-overlay.open .modal,
 #copy-modal-overlay.open .modal,
 #sync-modal-overlay.open .modal,
-#pin-modal-overlay.open .modal { transform: translateY(0); }
+#pin-modal-overlay.open .modal,
+#cc-modal-overlay.open .modal { transform: translateY(0); }
 
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
 
@@ -880,6 +881,7 @@ html, body {
         </div>
         <button class="btn btn-primary" onclick="openModal()" style="width:100%;padding:0.55rem">+ Adicionar Cifra</button>
         <button class="btn" onclick="openCopyModal()" style="width:100%;padding:0.45rem;margin-top:0.4rem;font-size:0.78rem">⧉ Copiar músicas de outro grupo</button>
+        <button class="btn" onclick="openCcModal()" style="width:100%;padding:0.45rem;margin-top:0.4rem;font-size:0.78rem">🔎 Buscar no Cifra Club</button>
       </div>
       <div id="song-list"></div>
     </aside>
@@ -889,6 +891,7 @@ html, body {
       <div class="sidebar-top-mobile">
         <button class="btn btn-primary" onclick="openModal()" style="width:100%;padding:0.6rem">+ Adicionar Cifra</button>
         <button class="btn" onclick="openCopyModal()" style="width:100%;padding:0.5rem;margin-top:0.4rem;font-size:0.8rem">⧉ Copiar músicas de outro grupo</button>
+        <button class="btn" onclick="openCcModal()" style="width:100%;padding:0.5rem;margin-top:0.4rem;font-size:0.8rem">🔎 Buscar no Cifra Club</button>
       </div>
       <div id="song-list-mobile"></div>
     </div>
@@ -1136,6 +1139,30 @@ Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea
     <div class="modal-footer">
       <button class="btn" onclick="closeGroupModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="saveGroup()" style="padding:0.5rem 1.25rem">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL (buscar no Cifra Club)
+══════════════════════════════════ -->
+<div id="cc-modal-overlay">
+  <div class="modal" style="max-height:85dvh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>🔎 Buscar no Cifra Club</h3>
+      <button class="modal-close" onclick="closeCcModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>Música ou artista</label>
+        <input type="text" id="inp-cc-search" placeholder="ex: oceano, fernandinho..."
+               autocomplete="off" autocapitalize="off" spellcheck="false"
+               oninput="ccOnInput()"
+               onkeydown="if(event.key===&#39;Enter&#39;){event.preventDefault();ccSearch();}">
+      </div>
+      <div id="cc-status" style="font-size:0.78rem;color:var(--text-muted);line-height:1.45;min-height:1.1em"></div>
+      <div id="cc-results"></div>
     </div>
   </div>
 </div>
@@ -2866,6 +2893,217 @@ async function gdriveFindFile(token) {
   const d = await r.json();
   return d.files && d.files[0];
 }
+
+// ══════════════════════════════════
+// BUSCA NO CIFRA CLUB
+// ══════════════════════════════════
+//
+// BUSCAR funciona direto do navegador: solr.sscdn.co responde com
+// "Access-Control-Allow-Origin: *". A resposta vem embrulhada em JSONP, no
+// formato suggest_callback({...}), por isso o slice entre parenteses ali embaixo.
+// Nos resultados, t=2 e musica (tem slug) e t=1 e artista (nao serve pra cifra).
+//
+// BAIXAR A CIFRA nao funciona direto: www.cifraclub.com.br nao manda header CORS
+// nenhum, entao o navegador deixa o pedido sair mas proibe o app de ler a
+// resposta. Por isso passa por um proxy publico. Esses proxies caem e limitam
+// bastante (num mesmo dia de teste um respondeu 429 e o outro 520), entao a lista
+// e tentada em ordem ate uma funcionar. Se todas falharem, cai no fluxo manual de
+// abrir o site e colar, que o parser de colagem ja resolve.
+//
+// PRA FICAR 100% CONFIAVEL: troque CC_PROXIES por um proxy seu (ex: um Cloudflare
+// Worker), ai nao depende de servidor de terceiro.
+const CC_SEARCH_URL = 'https://solr.sscdn.co/cc/api/?q=';
+const CC_SITE = 'https://www.cifraclub.com.br/';
+const CC_PROXIES = [
+  u => 'https://api.cors.lol/?url=' + encodeURIComponent(u),
+  u => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u),
+  u => 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u)
+];
+
+let ccTimer = null;
+let ccLastQuery = '';
+let ccBusy = false;
+
+function openCcModal() {
+  document.getElementById('cc-modal-overlay').classList.add('open');
+  const i = document.getElementById('inp-cc-search');
+  i.value = '';
+  document.getElementById('cc-results').innerHTML = '';
+  ccSetStatus('Digite o nome da m\u00fasica ou do artista.');
+  setTimeout(() => i.focus(), 150);
+}
+
+function closeCcModal() {
+  document.getElementById('cc-modal-overlay').classList.remove('open');
+  clearTimeout(ccTimer);
+}
+
+function ccSetStatus(msg, kind) {
+  const el = document.getElementById('cc-status');
+  el.textContent = msg || '';
+  el.style.color = (kind === 'err') ? '#c0392b' : 'var(--text-muted)';
+}
+
+function ccOnInput() {
+  clearTimeout(ccTimer);
+  ccTimer = setTimeout(ccSearch, 350);
+}
+
+async function ccSearch() {
+  clearTimeout(ccTimer);
+  const q = document.getElementById('inp-cc-search').value.trim();
+  const box = document.getElementById('cc-results');
+  if (q.length < 2) { box.innerHTML = ''; ccSetStatus('Digite pelo menos 2 letras.'); return; }
+  ccLastQuery = q;
+  ccSetStatus('Buscando\u2026');
+  try {
+    const r = await fetch(CC_SEARCH_URL + encodeURIComponent(q));
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const t = await r.text();
+    const a = t.indexOf('('), b = t.lastIndexOf(')');
+    if (a < 0 || b <= a) throw new Error('resposta fora do formato esperado');
+    const data = JSON.parse(t.slice(a + 1, b));
+    if (q !== ccLastQuery) return; // chegou atrasada, ja tem busca mais nova
+    const docs = (data.response && data.response.docs) || [];
+    ccRenderResults(docs.filter(d => String(d.t) === '2' && d.url && d.dns));
+  } catch (e) {
+    ccSetStatus('N\u00e3o consegui buscar: ' + (e.message || e) + '. Voc\u00ea est\u00e1 online?', 'err');
+  }
+}
+
+function ccRenderResults(list) {
+  const box = document.getElementById('cc-results');
+  box.innerHTML = '';
+  if (!list.length) { ccSetStatus('Nada encontrado.'); return; }
+  ccSetStatus('Toque numa m\u00fasica pra baixar e salvar no app.');
+  list.slice(0, 20).forEach(d => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:0.6rem;padding:0.55rem 0.75rem;border-bottom:1px solid var(--border-soft);cursor:pointer';
+    const txt = document.createElement('div');
+    txt.style.cssText = 'flex:1;min-width:0';
+    const nome = document.createElement('div');
+    nome.textContent = d.txt || '(sem nome)';
+    nome.style.cssText = 'font-weight:600;font-size:0.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    const art = document.createElement('div');
+    art.textContent = d.art || '';
+    art.style.cssText = 'font-size:0.74rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+    txt.appendChild(nome); txt.appendChild(art);
+    const ico = document.createElement('span');
+    ico.textContent = '\u2193';
+    ico.style.cssText = 'font-size:0.95rem;color:var(--text-muted);flex-shrink:0';
+    row.appendChild(txt); row.appendChild(ico);
+    row.onclick = () => ccImport(d);
+    box.appendChild(row);
+  });
+}
+
+async function ccImport(d) {
+  if (ccBusy) return;
+  ccBusy = true;
+  const url = CC_SITE + d.dns + '/' + d.url + '/';
+  let html = null, erro = 'nenhum proxy respondeu';
+  for (let i = 0; i < CC_PROXIES.length; i++) {
+    ccSetStatus('Baixando "' + d.txt + '"\u2026 (tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + ')');
+    try {
+      const ctl = new AbortController();
+      const to = setTimeout(() => ctl.abort(), 20000);
+      const r = await fetch(CC_PROXIES[i](url), { signal: ctl.signal });
+      clearTimeout(to);
+      if (!r.ok) { erro = 'proxy ' + (i + 1) + ' devolveu HTTP ' + r.status; continue; }
+      const body = await r.text();
+      if (body.indexOf('<pre') === -1) { erro = 'proxy ' + (i + 1) + ' devolveu p\u00e1gina sem cifra'; continue; }
+      html = body;
+      break;
+    } catch (e) {
+      erro = 'proxy ' + (i + 1) + ': ' + (e.name === 'AbortError' ? 'demorou demais' : (e.message || e));
+    }
+  }
+  ccBusy = false;
+  if (!html) { ccFallback(d, url, erro); return; }
+
+  const song = ccParse(html, d.txt, d.art);
+  if (!song) { ccFallback(d, url, 'baixou, mas n\u00e3o achei a cifra na p\u00e1gina'); return; }
+
+  const songs = getSongs();
+  songs.push(song);
+  save();
+  renderSongList();
+  selectSong(songs.length - 1);
+  closeCcModal();
+  driveToast('"' + song.title + '" salva no app \u2713', 'ok');
+}
+
+// Le o HTML da pagina do Cifra Club e monta o objeto de musica do app.
+// A pagina vem renderizada no servidor, entao basta o DOMParser: nao precisa de
+// Selenium nem navegador headless. O <pre> guarda a cifra com os espacos de
+// alinhamento intactos, que e o que faz o acorde cair em cima da silaba certa.
+function ccParse(htmlText, tituloFallback, artistaFallback) {
+  let doc;
+  try { doc = new DOMParser().parseFromString(htmlText, 'text/html'); } catch (e) { return null; }
+
+  const pre = doc.querySelector('pre');
+  if (!pre || !pre.textContent.trim()) return null;
+
+  // og:title vem como "Musica - Artista - Cifra Club"
+  let title = tituloFallback || '';
+  let artist = artistaFallback || '';
+  const og = doc.querySelector('meta[property="og:title"]');
+  if (og && og.getAttribute('content')) {
+    const p = og.getAttribute('content').split(' - ').map(x => x.trim()).filter(Boolean);
+    if (p.length >= 2) { title = p[0]; artist = p[1]; }
+  }
+
+  // Tom: botao do seletor de tonalidade no topo da cifra
+  let key = '';
+  const tomEl = doc.querySelector('[data-chord-config] [data-anchor="--chord-tone"]');
+  if (tomEl) {
+    const t = tomEl.textContent.trim();
+    if (KEY_NAMES.indexOf(t) !== -1) key = t;
+  }
+
+  // Capotraste fica fora do <pre>. Remove style/script/pre antes de olhar o texto,
+  // senao o CSS e a propria cifra geram falso positivo.
+  let capo = 0;
+  if (doc.body) {
+    const clone = doc.body.cloneNode(true);
+    clone.querySelectorAll('style, script, pre').forEach(n => n.remove());
+    const m = clone.textContent.match(/capotraste\s*(?:na)?\s*(\d+)/i);
+    if (m) { const n = parseInt(m[1]); if (n > 0 && n <= 12) capo = n; }
+  }
+
+  // Reaproveita o parser da colagem pra limpar linhas de Tom/Capo/Afinacao que as
+  // vezes vem dentro do proprio corpo da cifra.
+  const parsed = parseCifraClubText(pre.textContent);
+  return {
+    title: title,
+    artist: artist,
+    key: key || parsed.key,
+    capo: capo || parsed.capo,
+    bpm: parsed.bpm,
+    chords: parsed.chords
+  };
+}
+
+// Todos os proxies falharam: oferece abrir no site pra colar a mao.
+function ccFallback(d, url, erro) {
+  ccSetStatus('N\u00e3o deu pra baixar (' + erro + ').', 'err');
+  const box = document.getElementById('cc-results');
+  box.innerHTML = '';
+  const b = document.createElement('button');
+  b.className = 'btn btn-primary';
+  b.style.cssText = 'width:100%;padding:0.6rem;margin-top:0.5rem';
+  b.textContent = '\u2197 Abrir "' + (d.txt || 'm\u00fasica') + '" no Cifra Club';
+  b.onclick = () => window.open(url, '_blank', 'noopener');
+  box.appendChild(b);
+  const p = document.createElement('div');
+  p.style.cssText = 'font-size:0.76rem;color:var(--text-muted);margin-top:0.7rem;line-height:1.5';
+  p.textContent = 'Copie a cifra l\u00e1 e cole em "+ Adicionar Cifra": o app preenche t\u00edtulo, tom e capotraste sozinho.';
+  box.appendChild(p);
+}
+
+document.getElementById('cc-modal-overlay').addEventListener('click', function (e) {
+  if (e.target === this) closeCcModal();
+});
 
 // Senha pedida antes de SALVAR no Drive, pra não sobrescrever o backup sem querer.
 const DRIVE_SAVE_PIN = '1234';
