@@ -2939,25 +2939,51 @@ async function gdriveFindFile(token) {
 // nenhum, entao o navegador deixa o pedido sair mas proibe o app de ler a
 // resposta. Por isso precisa passar por um proxy.
 //
-// ATENCAO, o estado real disso (medido, nao suposto): proxy publico aqui e
-// pouco confiavel. Testando os cinco candidatos a partir de uma origem https
-// real, todos falharam na mesma rodada (522, 522, 429, 403, 429). O allorigins
-// /get e o unico que, quando esta de pe, devolve CORS correto ecoando a origem
-// do app; o /raw dele responde 500 e o cors.lol nao manda header CORS nenhum
-// pra origem real (so funciona de origem nula, tipo arquivo local, o que engana
-// em teste e nao serve em producao).
+// ATENCAO, o estado real disso (medido, nao suposto). Medicao de 09/09/2026,
+// de origem https real: allorigins e codetabs responderam 522 (o servidor deles
+// caiu), corsfix respondeu 403. Ou seja, os tres proxies publicos genericos
+// estavam fora ao mesmo tempo -- e por isso que o download parou de funcionar.
 //
-// Ou seja: em dia bom baixa sozinho, em dia ruim cai no fluxo manual de abrir o
-// site e colar, que o parser de colagem ja resolve. O conserto de verdade e
-// trocar CC_PROXIES por um proxy proprio (um Cloudflare Worker de ~20 linhas no
-// plano gratis), que tira a dependencia de terceiro e o rate limit.
+// O r.jina.ai (Reader da Jina) esta de pe e e o mais confiavel dos gratuitos:
+// responde 200, ecoa a origem no Access-Control-Allow-Origin, responde o
+// preflight OPTIONS e, com o header X-Return-Format: html, devolve o HTML
+// renderizado com o <pre> e o og:title intactos -- exatamente o que o ccParse
+// espera. Sem chave de API tem limite de requisicao por IP (algo perto de 20
+// por minuto), o que sobra pra este app. Por isso ele vai primeiro na fila.
 //
-// Formato de cada proxy: nome (pra mensagem de erro), url (monta o endereco) e
-// extrai (le a resposta, que num caso e JSON e no outro e o HTML cru).
+// O conserto definitivo, tambem de graca, e CC_WORKER: um Cloudflare Worker
+// proprio no plano free (100 mil requisicoes por dia, sem cartao). Enquanto
+// CC_WORKER for string vazia, a lista roda so com os proxies de terceiros.
+//
+// Formato de cada proxy: nome (pra mensagem de erro), url (monta o endereco),
+// opts (opcional, headers extras do fetch) e extrai (le a resposta, que num
+// caso e JSON e nos outros e o HTML cru).
 const CC_SEARCH_URL = 'https://solr.sscdn.co/cc/api/?q=';
 const CC_SITE = 'https://www.cifraclub.com.br/';
 const CC_TIMEOUT = 8000; // os proxies que funcionam respondem em 2-6s; alem disso e cadaver
+
+// Cole aqui a URL do seu Cloudflare Worker (ver instrucoes no README/commit).
+// Exemplo: 'https://cifra-proxy.SEU-NOME.workers.dev/?url='
+// Vazio = nao usa worker proprio, so os proxies publicos abaixo.
+const CC_WORKER = '';
+
 const CC_PROXIES = [
+  ...(CC_WORKER ? [{
+    nome: 'worker',
+    url: u => CC_WORKER + encodeURIComponent(u),
+    extrai: r => r.text()
+  }] : []),
+  {
+    // Reader da Jina. Sem o header abaixo ele devolve markdown, que perde o
+    // alinhamento acorde/silaba do <pre>; com ele vem o HTML cru.
+    nome: 'jina',
+    url: u => 'https://r.jina.ai/' + u,
+    opts: { headers: { 'X-Return-Format': 'html' } },
+    // Pagina em cache volta em menos de 1s; pagina fria ele abre num navegador
+    // headless do lado dele, e ai passa dos 8s do limite geral.
+    timeout: 20000,
+    extrai: r => r.text()
+  },
   {
     nome: 'allorigins',
     url: u => 'https://api.allorigins.win/get?url=' + encodeURIComponent(u),
@@ -3140,8 +3166,8 @@ async function ccImport(d, row, ico, sub) {
             'Baixando a ' + qual + ' de "' + d.txt + '"\u2026 tentativa ' + (i + 1) + ' de ' + CC_PROXIES.length + '.');
       try {
         const ctl = new AbortController();
-        const to = setTimeout(() => ctl.abort(), CC_TIMEOUT);
-        const r = await fetch(px.url(alvo.href), { signal: ctl.signal });
+        const to = setTimeout(() => ctl.abort(), px.timeout || CC_TIMEOUT);
+        const r = await fetch(px.url(alvo.href), Object.assign({ signal: ctl.signal }, px.opts || {}));
         clearTimeout(to);
         if (!r.ok) { erro = px.nome + ' devolveu HTTP ' + r.status; continue; }
         algumRespondeu = true;
