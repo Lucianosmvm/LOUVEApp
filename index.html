@@ -697,7 +697,7 @@ html, body {
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
-#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay {
+#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay, #warn-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
@@ -710,7 +710,7 @@ html, body {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open, #warn-modal-overlay.open { opacity: 1; pointer-events: all; }
 
 .modal {
   background: var(--surface);
@@ -730,6 +730,7 @@ html, body {
 #copy-modal-overlay.open .modal,
 #sync-modal-overlay.open .modal,
 #pin-modal-overlay.open .modal,
+#warn-modal-overlay.open .modal,
 #cc-modal-overlay.open .modal { transform: translateY(0); }
 
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
@@ -1225,6 +1226,27 @@ Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea
     <div class="modal-footer">
       <button class="btn" onclick="closePinModal(false)">Cancelar</button>
       <button class="btn btn-primary" onclick="confirmPinModal()" style="padding:0.5rem 1.25rem">Salvar no Drive</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL (aviso antes de sobrescrever dados do Drive)
+══════════════════════════════════ -->
+<div id="warn-modal-overlay">
+  <div class="modal" style="max-height:70dvh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3 id="warn-titulo">Atenção</h3>
+      <button class="modal-close" onclick="closeWarnModal(false)">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="warn-texto" style="font-size:0.85rem;line-height:1.55;margin:0;white-space:pre-line"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="closeWarnModal(false)">Cancelar</button>
+      <button class="btn" id="warn-ok" onclick="closeWarnModal(true)"
+              style="padding:0.5rem 1.25rem;background:#c0524a;color:#fff;border-color:#c0524a">Continuar</button>
     </div>
   </div>
 </div>
@@ -3309,17 +3331,127 @@ function confirmPinModal() {
   }
 }
 
+// ══════════════════════════════════
+// PROTECAO CONTRA SOBRESCRITA CEGA
+// ══════════════════════════════════
+//
+// SALVAR e SINCRONIZAR sao os dois destrutivos: um troca o arquivo do Drive
+// inteiro pelo que tem neste aparelho, o outro troca a lista deste aparelho
+// inteira pela do Drive. Nenhum dos dois funde nada. Com mais de um celular
+// usando o mesmo backup, isso apaga trabalho em silencio: basta um aparelho com
+// a lista velha tocar em SALVAR pra derrubar do Drive o que outro acabou de
+// adicionar -- e a proxima sincronizacao propaga a perda pros outros.
+//
+// A protecao nao e merge automatico (fundir por id ressuscitaria musica apagada
+// de proposito, o que e outro jeito de errar). E aviso com numero na frente:
+// antes de sobrescrever, o app compara e mostra o que vai sumir, e so segue se
+// a pessoa confirmar.
+//
+// Duas comparacoes, uma pra cada lado:
+//   - modifiedTime do arquivo no Drive != o que este aparelho viu na ultima vez
+//     => alguem mexeu no Drive depois deste aparelho. SALVAR avisa.
+//   - impressao digital dos dados locais != a da ultima sincronizacao
+//     => este aparelho tem alteracao que nunca foi enviada. SINCRONIZAR avisa.
+//
+// A impressao digital e calculada so na hora de salvar/sincronizar, nunca no
+// save() -- assim editar musica continua tao barato quanto era, e trocar de
+// grupo (que mexe no activeGroupId, nao no conteudo) nao conta como alteracao.
+const DRIVE_VISTO_KEY = 'louva_drive_visto';
+
+// djb2. Nao precisa ser criptografico: so precisa mudar quando o conteudo muda.
+function driveFingerprint() {
+  const t = JSON.stringify(groups);
+  let h = 5381;
+  for (let i = 0; i < t.length; i++) h = (((h << 5) + h) ^ t.charCodeAt(i)) >>> 0;
+  return h.toString(36) + '.' + t.length;
+}
+
+function driveVisto() {
+  try { return JSON.parse(localStorage.getItem(DRIVE_VISTO_KEY) || 'null'); } catch (e) { return null; }
+}
+
+function driveSetVisto(fileId, modifiedTime) {
+  try {
+    localStorage.setItem(DRIVE_VISTO_KEY, JSON.stringify({
+      fileId: fileId || null, modifiedTime: modifiedTime || null, fp: driveFingerprint()
+    }));
+  } catch (e) {}
+}
+
+function driveContaMusicas(gs) {
+  return (gs || []).reduce((n, g) => n + ((g && g.songs) ? g.songs.length : 0), 0);
+}
+
+function driveQuando(iso) {
+  if (!iso) return 'data desconhecida';
+  const d = new Date(iso);
+  return isNaN(d) ? 'data desconhecida' : d.toLocaleString('pt-BR');
+}
+
+let _warnResolve = null;
+
+function askWarn(titulo, texto, rotuloOk) {
+  return new Promise(resolve => {
+    _warnResolve = resolve;
+    document.getElementById('warn-titulo').textContent = titulo;
+    document.getElementById('warn-texto').textContent = texto;
+    document.getElementById('warn-ok').textContent = rotuloOk;
+    document.getElementById('warn-modal-overlay').classList.add('open');
+  });
+}
+
+function closeWarnModal(ok) {
+  document.getElementById('warn-modal-overlay').classList.remove('open');
+  const r = _warnResolve;
+  _warnResolve = null;
+  if (r) r(!!ok);
+}
+
+// Le o conteudo do arquivo de backup do Drive. Usado tanto pra sincronizar
+// quanto pra dizer, no aviso, quantas musicas tem la do outro lado.
+async function driveBaixaArquivo(token, fileId) {
+  const r = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: 'Bearer ' + token }
+  });
+  if (!r.ok) throw new Error('Falha ao baixar (' + r.status + ').');
+  return r.json();
+}
+
 // BACKUP: envia os dados locais para o Drive (cria ou atualiza o mesmo arquivo).
 async function gdriveBackup() {
   if (!(await askDrivePin())) return;
   try {
-    driveToast('Enviando backup…', 'wait');
+    driveToast('Consultando o Drive…', 'wait');
     const token = await gdriveAuth();
     const existing = await gdriveFindFile(token);
+
+    // O arquivo mudou depois da ultima vez que este aparelho olhou pra ele?
+    // Entao tem trabalho de outro aparelho ali que este aqui nunca viu.
+    const visto = driveVisto();
+    if (existing && (!visto || visto.modifiedTime !== existing.modifiedTime)) {
+      let remoto = null;
+      try { remoto = await driveBaixaArquivo(token, existing.id); } catch (e) {}
+      const nLocal = driveContaMusicas(groups);
+      const nRemoto = remoto && remoto.groups ? driveContaMusicas(remoto.groups) : null;
+      const linhaContagem = (nRemoto === null)
+        ? ''
+        : '\nNo Drive: ' + nRemoto + ' música(s).' + '\nNeste aparelho: ' + nLocal + ' música(s).' + '\n';
+      const ok = await askWarn(
+        'O Drive tem mudanças mais novas',
+        'O backup do Drive foi alterado em ' + driveQuando(existing.modifiedTime) +
+        ', e este aparelho nunca baixou essa versão.' + '\n' + linhaContagem +
+        '\nSe você salvar agora, o que está no Drive some e fica valendo só a lista deste aparelho.' +
+        '\n\nO mais seguro é cancelar, tocar em SINCRONIZAR pra trazer o que está lá, conferir, e só então salvar.',
+        'Substituir mesmo assim'
+      );
+      if (!ok) { driveToast('Cancelado. Nada foi enviado ao Drive.', 'err'); return; }
+    }
+
+    driveToast('Enviando backup…', 'wait');
     const content = JSON.stringify({ groups, activeGroupId, savedAt: Date.now() });
     let r;
     if (existing) {
-      r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media`, {
+      r = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existing.id}?uploadType=media&fields=id,modifiedTime`, {
         method: 'PATCH',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
         body: content
@@ -3333,13 +3465,18 @@ async function gdriveBackup() {
         `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n` +
         content +
         `\r\n--${boundary}--`;
-      r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,modifiedTime', {
         method: 'POST',
         headers: { Authorization: 'Bearer ' + token, 'Content-Type': `multipart/related; boundary=${boundary}` },
         body
       });
     }
     if (!r.ok) throw new Error('Falha ao enviar (' + r.status + ').');
+    // Guarda o estado que este aparelho acabou de deixar no Drive: e contra ele
+    // que a proxima comparacao vai medir.
+    let salvo = null;
+    try { salvo = await r.json(); } catch (e) {}
+    driveSetVisto(salvo && salvo.id, salvo && salvo.modifiedTime);
     driveToast('Backup salvo no Drive ✓', 'ok');
   } catch (e) {
     driveToast(e.message || 'Erro no backup.', 'err');
@@ -3353,16 +3490,34 @@ async function gdriveSync() {
     const token = await gdriveAuth();
     const f = await gdriveFindFile(token);
     if (!f) { driveToast('Nenhum backup encontrado no Drive.', 'err'); return; }
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?alt=media`, {
-      headers: { Authorization: 'Bearer ' + token }
-    });
-    if (!r.ok) throw new Error('Falha ao baixar (' + r.status + ').');
-    const d = await r.json();
+    const d = await driveBaixaArquivo(token, f.id);
     if (!d.groups || !Array.isArray(d.groups)) throw new Error('Backup inválido no Drive.');
+
+    // Baixa primeiro, avisa depois: assim o aviso diz quantas musicas tem de
+    // cada lado em vez de falar no abstrato.
+    const visto = driveVisto();
+    if (!visto || visto.fp !== driveFingerprint()) {
+      const nLocal = driveContaMusicas(groups);
+      const nRemoto = driveContaMusicas(d.groups);
+      const ok = await askWarn(
+        'Este aparelho tem alterações não enviadas',
+        'Você mexeu na lista deste aparelho e não salvou no Drive depois disso.' +
+        '\n\nNeste aparelho: ' + nLocal + ' música(s).' +
+        '\nNo Drive (de ' + driveQuando(f.modifiedTime) + '): ' + nRemoto + ' música(s).' +
+        '\n\nSincronizar troca a lista deste aparelho pela do Drive. O que você mudou aqui e não enviou se perde.',
+        'Baixar mesmo assim'
+      );
+      if (!ok) { driveToast('Cancelado. Nada mudou neste aparelho.', 'err'); return; }
+    }
+
     groups = d.groups;
     activeGroupId = d.activeGroupId || (groups[0] ? groups[0].id : null);
     activeIdx = -1;
     save();
+    // Marca o estado do Drive ANTES de desenhar a tela. Se algum render falhar,
+    // o dado ja esta salvo e o marcador ja bate com ele; deixar isso pra depois
+    // faria uma tela quebrada virar aviso errado na proxima vez.
+    driveSetVisto(f.id, f.modifiedTime);
     renderGroupsBar();
     renderSongList();
     renderSheet();
