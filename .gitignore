@@ -1,0 +1,3 @@
+# cache local do wrangler, nao vai pro repositorio
+.wrangler/
+node_modules/
