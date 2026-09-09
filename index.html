@@ -2962,10 +2962,9 @@ const CC_SEARCH_URL = 'https://solr.sscdn.co/cc/api/?q=';
 const CC_SITE = 'https://www.cifraclub.com.br/';
 const CC_TIMEOUT = 8000; // os proxies que funcionam respondem em 2-6s; alem disso e cadaver
 
-// Cole aqui a URL do seu Cloudflare Worker (ver instrucoes no README/commit).
-// Exemplo: 'https://cifra-proxy.SEU-NOME.workers.dev/?url='
-// Vazio = nao usa worker proprio, so os proxies publicos abaixo.
-const CC_WORKER = '';
+// Proxy proprio, no plano free da Cloudflare. Codigo e instrucoes de deploy em
+// cifra-proxy-worker.js; wrangler.toml na raiz. Vazio = so os publicos abaixo.
+const CC_WORKER = 'https://cifra-proxy.lucianovmuhlen.workers.dev/?url=';
 
 const CC_PROXIES = [
   ...(CC_WORKER ? [{

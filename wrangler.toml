@@ -1,0 +1,5 @@
+# Configuracao do proxy de cifra (ver instrucoes em cifra-proxy-worker.js).
+# Deploy: npx wrangler deploy
+name = "cifra-proxy"
+main = "cifra-proxy-worker.js"
+compatibility_date = "2026-09-09"
