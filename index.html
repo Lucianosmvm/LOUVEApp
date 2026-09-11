@@ -755,7 +755,9 @@ body.modo-letra .cl-empty { height: 0.9em; }
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
-  z-index: 300;
+  /* Acima de tudo que é fixo: modo Play (500), Ao Vivo (520), metrônomo (540) e
+     botão de pausa (550). Com 300 a barra do metrônomo cobria o botão Salvar. */
+  z-index: 600;
   display: flex;
   align-items: flex-end;
   justify-content: center;
