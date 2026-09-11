@@ -679,6 +679,18 @@ html, body {
 .eq-choice-btn { text-align: left; line-height: 1.35; white-space: normal; }
 .eq-choice-btn small { display: block; font-size: 0.72rem; opacity: 0.75; font-weight: 400; }
 
+/* Tom do culto */
+#tom-culto-btn.tom-fixo { background: var(--accent-light); border-color: var(--accent); }
+.tom-culto-tag { color: var(--accent-deep); font-size: 0.78em; }
+
+/* Lixeira */
+.lx-row { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.2rem; border-bottom: 1px solid var(--border-soft); }
+.lx-row:last-child { border-bottom: 0; }
+.lx-txt { flex: 1; min-width: 0; }
+.lx-tit { font-weight: 600; font-size: 0.88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lx-sub { font-size: 0.74rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lx-row .btn { flex-shrink: 0; font-size: 0.78rem; padding: 0.35rem 0.7rem; }
+
 /* ══════════════════════════════════
    MOBILE TABS
 ══════════════════════════════════ */
@@ -710,7 +722,7 @@ html, body {
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
-#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay, #warn-modal-overlay, #equipe-modal-overlay {
+#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay, #warn-modal-overlay, #equipe-modal-overlay, #lixeira-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
@@ -723,7 +735,7 @@ html, body {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open, #warn-modal-overlay.open, #equipe-modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open, #warn-modal-overlay.open, #equipe-modal-overlay.open, #lixeira-modal-overlay.open { opacity: 1; pointer-events: all; }
 
 .modal {
   background: var(--surface);
@@ -745,6 +757,7 @@ html, body {
 #pin-modal-overlay.open .modal,
 #warn-modal-overlay.open .modal,
 #equipe-modal-overlay.open .modal,
+#lixeira-modal-overlay.open .modal,
 #cc-modal-overlay.open .modal { transform: translateY(0); }
 
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
@@ -922,6 +935,7 @@ html, body {
         <button class="btn btn-primary" onclick="openModal()" style="width:100%;padding:0.55rem">+ Adicionar Cifra</button>
         <button class="btn" onclick="openCopyModal()" style="width:100%;padding:0.45rem;margin-top:0.4rem;font-size:0.78rem">⧉ Copiar músicas de outro grupo</button>
         <button class="btn" onclick="openCcModal()" style="width:100%;padding:0.45rem;margin-top:0.4rem;font-size:0.78rem">🔎 Buscar no Cifra Club</button>
+        <button class="btn" onclick="openLixeiraModal()" style="width:100%;padding:0.45rem;margin-top:0.4rem;font-size:0.78rem">🗑 Lixeira<span class="lixeira-count"></span></button>
       </div>
       <div id="song-list"></div>
     </aside>
@@ -932,6 +946,7 @@ html, body {
         <button class="btn btn-primary" onclick="openModal()" style="width:100%;padding:0.6rem">+ Adicionar Cifra</button>
         <button class="btn" onclick="openCopyModal()" style="width:100%;padding:0.5rem;margin-top:0.4rem;font-size:0.8rem">⧉ Copiar músicas de outro grupo</button>
         <button class="btn" onclick="openCcModal()" style="width:100%;padding:0.5rem;margin-top:0.4rem;font-size:0.8rem">🔎 Buscar no Cifra Club</button>
+        <button class="btn" onclick="openLixeiraModal()" style="width:100%;padding:0.5rem;margin-top:0.4rem;font-size:0.8rem">🗑 Lixeira<span class="lixeira-count"></span></button>
       </div>
       <div id="song-list-mobile"></div>
     </div>
@@ -972,7 +987,8 @@ html, body {
           <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
         </div>
         <div class="tb-group tb-actions" style="margin-left:auto; gap:0.4rem">
-          <button class="btn" onclick="resetAll()" title="Resetar tom e capo">↺</button>
+          <button class="btn" id="tom-culto-btn" onclick="fixarTomCulto()" title="📌 Tom do culto: fixa o tom da tela pra equipe toda (toque de novo pra tirar)">📌</button>
+          <button class="btn" onclick="resetAll()" title="Resetar meu tom e capo">↺</button>
           <button class="btn btn-play" id="scroll-btn" onclick="enterPerformanceMode()">▶ Play</button>
         </div>
       </div>
@@ -990,6 +1006,7 @@ html, body {
             <div class="sheet-meta">
               <span><strong id="display-artist"></strong></span>
               <span>Tom: <strong id="display-cur-key"></strong></span>
+              <span id="display-tom-culto" class="tom-culto-tag" style="display:none"></span>
               <span id="display-capo-span" style="display:none">Capo: <strong id="display-capo"></strong>ª casa</span>
               <span id="display-bpm-span" style="display:none">BPM: <strong id="display-bpm"></strong></span>
             </div>
@@ -1104,6 +1121,20 @@ html, body {
       <button class="modal-close" onclick="closeEquipeModal()">✕</button>
     </div>
     <div class="modal-body" id="equipe-modal-body"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL (lixeira)
+══════════════════════════════════ -->
+<div id="lixeira-modal-overlay">
+  <div class="modal" style="max-height:85dvh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>🗑 Lixeira</h3>
+      <button class="modal-close" onclick="closeLixeiraModal()">✕</button>
+    </div>
+    <div class="modal-body" id="lixeira-modal-body"></div>
   </div>
 </div>
 
@@ -1412,16 +1443,35 @@ const CHORD_RE = /\b[A-G][#b]?(?:maj|min|dim|aug|sus|add|m|M|[0-9+#b()\-°øΔ])
 // Semitones applied to written chord SHAPES.
 // Capo raises sounding pitch, so removing capo must raise the shapes to keep
 // the same sound: shift = offset + (capoOriginal - effectiveCapo).
+// ── Tom do culto ──
+// song.tomCulto é o tom que o líder fixou pra esta música neste grupo (ex.: a
+// cifra está em B, mas domingo é em G). É conteúdo da música, então vale pra
+// equipe inteira. O −½/+½ de cada um (transposeOffset) soma por cima, só no
+// próprio aparelho. Guardado como nome do tom, não como semitons, pra continuar
+// certo se alguém corrigir o tom original da cifra depois.
+function semitonsEntre(de, para) {
+  const raiz = k => { const m = String(k || '').match(/^([A-G][#b]?)/); return m ? NOTES.indexOf(normNote(m[1])) : -1; };
+  const a = raiz(de), b = raiz(para);
+  if (a < 0 || b < 0) return 0;
+  const d = ((b - a) % 12 + 12) % 12;
+  return d > 6 ? d - 12 : d;
+}
+function tomCultoSemis(song) {
+  return (song && song.tomCulto && song.key) ? semitonsEntre(song.key, song.tomCulto) : 0;
+}
+
 function getTotalSemitones() {
   const songs = getSongs();
-  const capoOriginal = activeIdx >= 0 ? (parseInt(songs[activeIdx].capo) || 0) : 0;
-  return transposeOffset + (capoOriginal - getEffectiveCapo());
+  const song = activeIdx >= 0 ? songs[activeIdx] : null;
+  const capoOriginal = song ? (parseInt(song.capo) || 0) : 0;
+  return tomCultoSemis(song) + transposeOffset + (capoOriginal - getEffectiveCapo());
 }
 
 // Semitones applied to the SOUNDING key. Capo is compensated by the shapes,
-// so only the user retune (transposeOffset) changes the real key.
+// so only the culto key and the user retune (transposeOffset) change the real key.
 function getKeySemitones() {
-  return transposeOffset;
+  const song = activeIdx >= 0 ? getSongs()[activeIdx] : null;
+  return tomCultoSemis(song) + transposeOffset;
 }
 
 function transposeLine(line, semiArg) {
@@ -1614,7 +1664,10 @@ function esc(s) {
 function getCurrentKey() {
   const songs = getSongs();
   if (activeIdx === -1) return '—';
-  return transposeNote(songs[activeIdx].key, getKeySemitones());
+  const song = songs[activeIdx];
+  // Sem ajuste pessoal, mostra o tom do culto do jeito que o líder escolheu (F# e não Gb).
+  if (song.tomCulto && !transposeOffset) return song.tomCulto;
+  return transposeNote(song.key, getKeySemitones());
 }
 function getEffectiveCapo() {
   const songs = getSongs();
@@ -1629,7 +1682,35 @@ function songDisplayCapo(song) {
 function songDisplayKey(song) {
   if (!song.key) return '';
   const offset = parseInt(song.keyOffset) || 0;
-  return transposeNote(song.key, offset);
+  if (song.tomCulto && !offset) return song.tomCulto;
+  return transposeNote(song.key, tomCultoSemis(song) + offset);
+}
+
+// 📌: fixa o tom que está na tela como tom do culto (pra todos), ou tira.
+function fixarTomCulto() {
+  if (activeIdx === -1) return;
+  const song = getSongs()[activeIdx];
+  const naEquipe = (typeof eqCodigo !== 'undefined' && eqCodigo);
+  if (song.tomCulto && !transposeOffset) {
+    const aviso = naEquipe ? '\n\nMuda pra todos da equipe.' : '';
+    if (!confirm(`Tirar o tom do culto (${song.tomCulto}) e voltar pro tom original da cifra (${song.key})?${aviso}`)) return;
+    delete song.tomCulto;
+    driveToast('Voltou pro tom original: ' + song.key, 'ok');
+  } else if (!transposeOffset) {
+    driveToast('Use −½ e +½ até chegar no tom do culto e toque em 📌 de novo.', 'err');
+    return;
+  } else {
+    const novo = getCurrentKey();
+    if (semitonsEntre(song.key, novo) === 0) delete song.tomCulto; // voltou pro original
+    else song.tomCulto = novo;
+    driveToast('📌 Tom do culto: ' + novo + (naEquipe ? '. Todos da equipe veem.' : ''), 'ok');
+  }
+  transposeOffset = 0;
+  song.keyOffset = 0;
+  save();
+  renderSheet();
+  renderSongList();
+  syncOnChange();
 }
 
 // ══════════════════════════════════
@@ -1666,6 +1747,8 @@ function renderSheet() {
 
   document.getElementById('key-display').textContent = curKey;
   document.getElementById('capo-display').textContent = capo;
+  const tcSong = activeIdx !== -1 ? songs[activeIdx] : null;
+  document.getElementById('tom-culto-btn').classList.toggle('tom-fixo', !!(tcSong && tcSong.tomCulto));
   document.getElementById('font-size-display').textContent = fontSize;
 
   if (activeIdx === -1 || !songs[activeIdx]) {
@@ -1681,6 +1764,15 @@ function renderSheet() {
   document.getElementById('display-title').textContent = song.title;
   document.getElementById('display-artist').textContent = song.artist || '';
   document.getElementById('display-cur-key').textContent = curKey;
+  const tcSpan = document.getElementById('display-tom-culto');
+  if (song.tomCulto) {
+    tcSpan.style.display = '';
+    tcSpan.textContent = transposeOffset
+      ? `📌 culto em ${song.tomCulto} · você em ${curKey}`
+      : `📌 tom do culto · original ${song.key}`;
+  } else {
+    tcSpan.style.display = 'none';
+  }
   if (capo > 0) {
     document.getElementById('display-capo-span').style.display = '';
     document.getElementById('display-capo').textContent = capo;
@@ -1950,7 +2042,7 @@ function syncPerf() {
   const curKey = getCurrentKey();
   const capo = getEffectiveCapo();
   document.getElementById('perf-title').textContent = song.title + (song.artist ? ` — ${song.artist}` : '');
-  document.getElementById('perf-info').textContent = `Tom: ${curKey}` + (capo > 0 ? `  Capo: ${capo}ª casa` : '');
+  document.getElementById('perf-info').textContent = `Tom: ${curKey}` + (song.tomCulto ? ' 📌' : '') + (capo > 0 ? `  Capo: ${capo}ª casa` : '');
   const speedLabel = scrollSpeed % 1 === 0 ? scrollSpeed : scrollSpeed.toFixed(1);
   const ps = document.getElementById('perf-speed-display');
   if (ps) ps.textContent = speedLabel;
@@ -2093,6 +2185,8 @@ function saveSong() {
   if (editingIdx >= 0) {
     // Mantém o id: pra equipe, editar é mudar a mesma música, não apagar e criar outra.
     if (songs[editingIdx] && songs[editingIdx].id) song.id = songs[editingIdx].id;
+    // O formulário não tem o tom do culto; sem isto, editar a letra apagaria o tom fixado.
+    if (songs[editingIdx] && songs[editingIdx].tomCulto) song.tomCulto = songs[editingIdx].tomCulto;
     songs[editingIdx] = song;
     // Reset transposição da sessão se editou a música ativa (tom original mudou)
     if (editingIdx === activeIdx) { transposeOffset = 0; capoOverride = -1; }
@@ -2342,6 +2436,8 @@ function saveLocal() {
 
 function save() {
   garanteIds();
+  // Definida no bloco da lixeira. Guarda o que sumiu desde o último save.
+  if (typeof lixeiraAoSalvar === 'function') lixeiraAoSalvar();
   saveLocal();
   // Definida no bloco da equipe, mais abaixo. Sobe a mudança pro Firebase.
   if (typeof equipeAoSalvar === 'function') equipeAoSalvar();
@@ -2763,7 +2859,7 @@ function syncPushState() {
   const s = songs[activeIdx];
   fbDb.ref('rooms/' + syncRoom + '/v').set({
     song: { title: s.title, artist: s.artist || '', key: s.key, capo: parseInt(s.capo) || 0, chords: s.chords || '' },
-    keyOffset: transposeOffset,
+    keyOffset: tomCultoSemis(s) + transposeOffset,
     capoOverride: capoOverride,
     fontSize: fontSize,
     ts: Date.now()
@@ -3144,7 +3240,10 @@ function eqParaGrupos(N, antes) {
 // adiciona ou reordena.
 function eqAplica(res) {
   const novos = eqParaGrupos(res, groups);
-  if (eqEstavel(novos) === eqEstavel(groups)) return;
+  if (eqEstavel(novos) === eqEstavel(groups)) {
+    if (typeof lixeiraMarca === 'function') lixeiraMarca();
+    return;
+  }
   const antes = getSongs();
   const ativa = antes[activeIdx] || null;
   const hashAtiva = ativa ? eqHash(eqConteudo(ativa)) : null;
@@ -3157,6 +3256,9 @@ function eqAplica(res) {
   const songs = getSongs();
   activeIdx = ativa ? songs.findIndex(s => s.id === ativa.id) : -1;
   if (editingIdx >= 0) editingIdx = editando ? songs.findIndex(s => s.id === editando) : -1;
+  // O que outro aparelho apagou já foi pra lixeira da equipe por ele: aqui só
+  // atualiza a referência, senão o próximo save daqui mandaria de novo.
+  if (typeof lixeiraMarca === 'function') lixeiraMarca();
   const ativaMudou = !!ativa && (activeIdx === -1 || eqHash(eqConteudo(songs[activeIdx])) !== hashAtiva);
 
   saveLocal();
@@ -3212,12 +3314,14 @@ function eqConecta() {
   });
   eqConnRef = fbDb.ref('.info/connected');
   eqConnRef.on('value', s => { eqOnline = !!s.val(); eqStatus(); });
+  if (typeof lixeiraEscutaEquipe === 'function') lixeiraEscutaEquipe();
   eqStatus();
   return true;
 }
 
 function eqDesconecta() {
-  if (eqRef) { try { eqRef.child('grupos').off(); } catch (e) {} }
+  if (eqRef) { try { eqRef.child('grupos').off(); eqRef.child('lixeira').off(); } catch (e) {} }
+  if (typeof lixeiraSaiDaEquipe === 'function') lixeiraSaiDaEquipe();
   if (eqConnRef) { try { eqConnRef.off(); } catch (e) {} }
   eqRef = null; eqConnRef = null; eqRemoto = null; eqOnline = false;
 }
@@ -3272,7 +3376,7 @@ async function eqCriar() {
     const existe = await eqComPrazo(fbDb.ref('equipes/' + codigo + '/criada').once('value'));
     if (existe.exists()) codigo = eqNovoCodigo();
     await eqComPrazo(fbDb.ref('equipes/' + codigo + '/criada').set(firebase.database.ServerValue.TIMESTAMP));
-    if (!eqTemMusicasProprias()) { groups = []; activeGroupId = null; activeIdx = -1; saveLocal(); eqRedesenhaTudo(); }
+    if (!eqTemMusicasProprias()) { groups = []; activeGroupId = null; activeIdx = -1; lixeiraMarca(); saveLocal(); eqRedesenhaTudo(); }
     eqEntraComo(codigo);
     driveToast('Equipe criada ✓ Agora mande o convite.', 'ok');
   } catch (e) {
@@ -3307,7 +3411,12 @@ async function eqEntrar(texto) {
 }
 
 function eqUsarDaEquipe(codigo) {
+  const proprias = eqTemMusicasProprias();
   groups = []; activeGroupId = null; activeIdx = -1;
+  // Ainda fora da equipe neste ponto: as músicas que saem daqui vão só pra
+  // lixeira DESTE aparelho, e dá pra recuperar se escolheu errado. As de
+  // exemplo nunca salvas não contam.
+  if (proprias) lixeiraAoSalvar(); else lixeiraMarca();
   saveLocal();
   eqRedesenhaTudo();
   eqEntraComo(codigo);
@@ -3462,6 +3571,326 @@ if (eqCodigo) eqConecta();
 eqStatus();
 // No load porque usa driveToast, que é definido no bloco do Drive, mais abaixo.
 window.addEventListener('load', eqConviteDaUrl);
+</script>
+
+<!-- ══════════════════════════════════
+     LIXEIRA
+══════════════════════════════════ -->
+<script>
+// Tudo que some da lista vai pra cá por 30 dias: música apagada, grupo apagado,
+// e também o que sumiu por "Baixar do Drive" ou "Importar". Na equipe, a
+// lixeira é compartilhada (equipes/<CÓDIGO>/lixeira): o que um apagou, qualquer
+// um recupera.
+//
+// Como descobre o que sumiu: em vez de pendurar código em cada botão de apagar,
+// o save() compara a lista com a da última vez (lxAntes). Assim nenhum caminho
+// que remove música escapa, inclusive os que ainda vão ser criados.
+//
+// Cada item também fica na lixeira local do aparelho que apagou, com enviado =
+// false até o servidor confirmar. Se apagaram na igreja sem internet, o item
+// sobe pra lixeira da equipe quando a conexão voltar. Depois de enviado, a
+// cópia local não aparece mais na lista (a da equipe manda), senão algo
+// restaurado noutro celular continuaria aparecendo aqui e voltaria duas vezes.
+const LX_KEY = 'louva_lixeira';
+const LX_DIAS = 30;
+const LX_MAX_LOCAL = 150;
+const LX_ID_RE = /^[a-z0-9]{4,40}$/;          // id de item da lixeira (uid())
+const LX_ID_MUSICA_RE = /^[A-Za-z0-9_-]{1,60}$/; // id de grupo/música (uid() ou 'demo-...')
+
+let lxAntes = { grupos: new Map(), musicas: new Map() };
+let lxEquipe = {};
+
+function lixeiraMarca() {
+  const grupos = new Map(), musicas = new Map();
+  groups.forEach((g, gi) => {
+    if (g.id) grupos.set(g.id, { g, pos: gi });
+    (g.songs || []).forEach((s, si) => { if (s.id) musicas.set(s.id, { s, g, pos: si }); });
+  });
+  lxAntes = { grupos, musicas };
+}
+
+function lxConteudoMusica(s) {
+  return Object.assign({ id: s.id }, eqConteudo(s));
+}
+
+function lixeiraAoSalvar() {
+  const gAgora = new Set(), sAgora = new Set();
+  groups.forEach(g => { gAgora.add(g.id); (g.songs || []).forEach(s => sAgora.add(s.id)); });
+  const novas = [];
+  const base = { quando: Date.now(), equipe: (typeof eqCodigo !== 'undefined' && eqCodigo) || null };
+
+  lxAntes.grupos.forEach(({ g, pos }, gid) => {
+    if (gAgora.has(gid)) return;
+    const songs = (g.songs || []).map(lxConteudoMusica);
+    novas.push(Object.assign({}, base, {
+      id: uid(), tipo: 'grupo', titulo: g.name || '(sem nome)', qtd: songs.length,
+      grupoId: gid, grupoNome: g.name || '', grupoCor: g.color || '', pos,
+      dados: JSON.stringify({ name: g.name || '', color: g.color || '', songs })
+    }));
+  });
+  lxAntes.musicas.forEach(({ s, g, pos }, sid) => {
+    // Música de grupo apagado já está dentro do item do grupo.
+    if (sAgora.has(sid) || !gAgora.has(g.id)) return;
+    novas.push(Object.assign({}, base, {
+      id: uid(), tipo: 'musica', titulo: s.title || '(sem título)', artista: s.artist || '',
+      grupoId: g.id, grupoNome: g.name || '', grupoCor: g.color || '', pos,
+      dados: JSON.stringify(lxConteudoMusica(s))
+    }));
+  });
+
+  lixeiraMarca();
+  if (!novas.length) return;
+
+  if (base.equipe) novas.forEach(e => { e.enviado = false; });
+  lxGravaLocal(novas.concat(lxLocal()));
+  novas.forEach(lxEnvia);
+  lixeiraAtualiza();
+  const msg = novas.length === 1
+    ? '"' + novas[0].titulo + '" foi pra 🗑 Lixeira. Dá pra recuperar por 30 dias.'
+    : novas.length + ' itens foram pra 🗑 Lixeira. Dá pra recuperar por 30 dias.';
+  // Deixa o toast de quem chamou o save (ex.: "Sincronizado do Drive") aparecer antes.
+  setTimeout(() => driveToast(msg, 'ok'), 0);
+}
+
+function lxValida(e, limite) {
+  return e && typeof e === 'object' && LX_ID_RE.test(String(e.id)) && typeof e.dados === 'string'
+    && (e.tipo === 'musica' || e.tipo === 'grupo') && e.quando > limite;
+}
+
+function lxLocal() {
+  const limite = Date.now() - LX_DIAS * 864e5;
+  try {
+    const a = JSON.parse(localStorage.getItem(LX_KEY) || '[]');
+    return Array.isArray(a) ? a.filter(e => lxValida(e, limite)) : [];
+  } catch (e) { return []; }
+}
+
+function lxGravaLocal(lista) {
+  lista = lista.slice(0, LX_MAX_LOCAL);
+  // Sem espaço no aparelho: joga fora a metade mais antiga e tenta de novo.
+  while (lista.length) {
+    try { localStorage.setItem(LX_KEY, JSON.stringify(lista)); return; }
+    catch (e) { lista = lista.slice(0, Math.floor(lista.length / 2)); }
+  }
+  try { localStorage.removeItem(LX_KEY); } catch (e) {}
+}
+
+function lxEnvia(e) {
+  if (typeof eqRef === 'undefined' || !eqRef || !e.equipe || e.equipe !== eqCodigo) return;
+  const copia = Object.assign({}, e);
+  delete copia.enviado;
+  eqRef.child('lixeira/' + e.id).set(copia).then(() => {
+    lxGravaLocal(lxLocal().map(x => x.id === e.id ? Object.assign(x, { enviado: true }) : x));
+  }).catch(() => {});
+}
+
+function lixeiraEscutaEquipe() {
+  if (!eqRef) return;
+  eqRef.child('lixeira').on('value', snap => {
+    const limite = Date.now() - LX_DIAS * 864e5;
+    const todos = snap.val() || {};
+    lxEquipe = {};
+    Object.keys(todos).forEach(k => {
+      if (lxValida(todos[k], limite) && todos[k].id === k) lxEquipe[k] = todos[k];
+      else eqRef.child('lixeira/' + k).remove().catch(() => {}); // venceu os 30 dias
+    });
+    // Apagado aqui sem internet: sobe agora.
+    lxLocal().forEach(e => { if (e.equipe === eqCodigo && !e.enviado && !lxEquipe[e.id]) lxEnvia(e); });
+    lixeiraAtualiza();
+  });
+}
+
+function lixeiraSaiDaEquipe() {
+  lxEquipe = {};
+  lixeiraAtualiza();
+}
+
+function lixeiraItens() {
+  const m = new Map();
+  Object.keys(lxEquipe).forEach(k => m.set(k, lxEquipe[k]));
+  const codigo = (typeof eqCodigo !== 'undefined' && eqCodigo) || null;
+  lxLocal().forEach(e => {
+    if (m.has(e.id)) return;
+    if (codigo && e.equipe === codigo && e.enviado) return; // a da equipe manda
+    m.set(e.id, e);
+  });
+  return [...m.values()].sort((a, b) => b.quando - a.quando);
+}
+
+function lxHaQuanto(ms) {
+  const min = Math.round((Date.now() - ms) / 60000);
+  if (min < 1) return 'agora';
+  if (min < 60) return 'há ' + min + ' min';
+  const h = Math.round(min / 60);
+  if (h < 24) return 'há ' + h + ' h';
+  const d = Math.round(h / 24);
+  return d === 1 ? 'ontem' : 'há ' + d + ' dias';
+}
+
+function lixeiraRestaura(id) {
+  const e = lixeiraItens().find(x => x.id === id);
+  if (!e) { driveToast('Esse item já foi recuperado.', 'err'); lixeiraAtualiza(); return; }
+  let dados;
+  try { dados = JSON.parse(e.dados); } catch (err) { dados = null; }
+  if (!dados || typeof dados !== 'object') { driveToast('Item da lixeira com defeito, não deu pra recuperar.', 'err'); return; }
+
+  // Reusa o id original se ninguém estiver usando; senão gera outro.
+  const usados = new Set();
+  groups.forEach(g => { usados.add(g.id); (g.songs || []).forEach(s => usados.add(s.id)); });
+  const livre = x => { const v = (typeof x === 'string' && LX_ID_MUSICA_RE.test(x) && !usados.has(x)) ? x : uid(); usados.add(v); return v; };
+  const musica = s => Object.assign(eqConteudo(s), { id: livre(s && s.id) });
+
+  let destino;
+  if (e.tipo === 'grupo') {
+    destino = {
+      id: livre(e.grupoId), name: dados.name || e.grupoNome || 'Recuperado',
+      color: dados.color || e.grupoCor || GROUP_COLORS[0],
+      songs: (Array.isArray(dados.songs) ? dados.songs : []).filter(s => s && typeof s === 'object').map(musica)
+    };
+    groups.splice(Math.min(parseInt(e.pos) || 0, groups.length), 0, destino);
+  } else {
+    destino = groups.find(g => g.id === e.grupoId);
+    if (!destino) {
+      destino = { id: livre(e.grupoId), name: e.grupoNome || 'Recuperadas', color: e.grupoCor || GROUP_COLORS[0], songs: [] };
+      groups.push(destino);
+    }
+    const pos = Math.min(parseInt(e.pos) || 0, destino.songs.length);
+    destino.songs.splice(pos, 0, musica(dados));
+    if (destino.id === activeGroupId && activeIdx >= pos) activeIdx++;
+  }
+
+  // Tira da lixeira antes do save, pra ninguém mais restaurar o mesmo item.
+  lxGravaLocal(lxLocal().filter(x => x.id !== id));
+  if (lxEquipe[id]) {
+    delete lxEquipe[id];
+    if (eqRef) eqRef.child('lixeira/' + id).remove().catch(() => {});
+  }
+
+  save();
+  if (destino.id !== activeGroupId) selectGroup(destino.id);
+  else { renderGroupsBar(); renderSongList(); renderSheet(); }
+  lixeiraAtualiza();
+  driveToast('"' + e.titulo + '" recuperad' + (e.tipo === 'grupo' ? 'o' : 'a') + ' ✓', 'ok');
+}
+
+function lixeiraAtualiza() {
+  const n = lixeiraItens().length;
+  document.querySelectorAll('.lixeira-count').forEach(el => { el.textContent = n ? ' (' + n + ')' : ''; });
+  if (document.getElementById('lixeira-modal-overlay').classList.contains('open')) renderLixeiraModalBody();
+}
+
+function openLixeiraModal() {
+  renderLixeiraModalBody();
+  document.getElementById('lixeira-modal-overlay').classList.add('open');
+}
+
+function closeLixeiraModal() {
+  document.getElementById('lixeira-modal-overlay').classList.remove('open');
+}
+
+// Montado com DOM e textContent: na equipe, os itens foram escritos por outros
+// aparelhos e não podem virar HTML.
+function renderLixeiraModalBody() {
+  const body = document.getElementById('lixeira-modal-body');
+  body.innerHTML = '';
+  const itens = lixeiraItens();
+  const intro = document.createElement('p');
+  intro.className = 'sync-status-line';
+  const naEquipe = (typeof eqCodigo !== 'undefined' && eqCodigo);
+  intro.textContent = itens.length
+    ? 'O que foi apagado fica aqui por 30 dias' + (naEquipe ? ' e aparece pra toda a equipe.' : '.')
+    : 'Nada na lixeira. O que for apagado fica aqui por 30 dias.';
+  body.appendChild(intro);
+
+  itens.forEach(e => {
+    const row = document.createElement('div');
+    row.className = 'lx-row';
+    const txt = document.createElement('div');
+    txt.className = 'lx-txt';
+    const tit = document.createElement('div');
+    tit.className = 'lx-tit';
+    tit.textContent = e.tipo === 'grupo'
+      ? '📁 ' + e.titulo + ' · ' + (parseInt(e.qtd) || 0) + ' música(s)'
+      : '🎵 ' + e.titulo + (e.artista ? ' — ' + e.artista : '');
+    const sub = document.createElement('div');
+    sub.className = 'lx-sub';
+    sub.textContent = (e.tipo === 'grupo' ? 'Grupo apagado ' : 'De "' + (e.grupoNome || '?') + '" · apagada ') + lxHaQuanto(e.quando);
+    txt.appendChild(tit);
+    txt.appendChild(sub);
+    const b = document.createElement('button');
+    b.className = 'btn';
+    b.textContent = '↩ Recuperar';
+    b.addEventListener('click', () => lixeiraRestaura(e.id));
+    row.appendChild(txt);
+    row.appendChild(b);
+    body.appendChild(row);
+  });
+}
+
+document.getElementById('lixeira-modal-overlay').addEventListener('click', function (e) {
+  if (e.target === this) closeLixeiraModal();
+});
+
+// Cifras salvas antes de existir id ganham um agora. Sem isso a referência
+// não teria como apontar pra elas, e o primeiro save (que dá o id) acharia que
+// a música "sem id" sumiu e mandaria pra lixeira à toa.
+garanteIds();
+lixeiraMarca();
+if (eqRef) lixeiraEscutaEquipe();
+lixeiraAtualiza();
+</script>
+
+<!-- ══════════════════════════════════
+     TELA ACESA
+══════════════════════════════════ -->
+<script>
+// No meio da música a tela do celular apagava e o músico tinha que tocar nela
+// com a mão ocupada. A Wake Lock API pede pro sistema não apagar.
+//
+// Fica acesa enquanto tem cifra aberta, modo Play ou "Ao Vivo" seguindo. Pra não
+// gastar bateria com o celular esquecido em cima do teclado, solta depois de
+// 30 min sem ninguém mexer. Rolagem automática e seguir o líder contam como uso.
+//
+// O sistema solta o pedido sozinho quando o app vai pro fundo; por isso ele é
+// refeito ao voltar (visibilitychange) e conferido a cada 15 s.
+// Navegador sem suporte (iPhone antes do iOS 16.4) só não mantém acesa.
+const TELA_OCIOSA_MS = 30 * 60 * 1000;
+let telaLock = null;
+let telaPedindo = false;
+let telaUltimoUso = Date.now();
+
+function telaPrecisaAcesa() {
+  if (document.visibilityState !== 'visible') return false;
+  const perf = document.getElementById('perf-overlay').classList.contains('active');
+  const seguindo = document.getElementById('sync-overlay').classList.contains('active');
+  if (scrolling || perfScrolling || seguindo) telaUltimoUso = Date.now();
+  if (!perf && !seguindo && activeIdx === -1) return false;
+  return Date.now() - telaUltimoUso < TELA_OCIOSA_MS;
+}
+
+async function telaAtualiza() {
+  if (!('wakeLock' in navigator)) return;
+  const quer = telaPrecisaAcesa();
+  if (quer && !telaLock && !telaPedindo) {
+    telaPedindo = true;
+    try {
+      const lock = await navigator.wakeLock.request('screen');
+      lock.addEventListener('release', () => { if (telaLock === lock) telaLock = null; });
+      telaLock = lock;
+    } catch (e) {} // ex.: bateria fraca ou sem gesto ainda; tenta de novo no próximo toque
+    telaPedindo = false;
+  } else if (!quer && telaLock) {
+    const lock = telaLock;
+    telaLock = null;
+    try { await lock.release(); } catch (e) {}
+  }
+}
+
+['pointerdown', 'keydown', 'wheel'].forEach(ev =>
+  document.addEventListener(ev, () => { telaUltimoUso = Date.now(); telaAtualiza(); }, { passive: true, capture: true }));
+document.addEventListener('visibilitychange', telaAtualiza);
+setInterval(telaAtualiza, 15000);
+telaAtualiza();
 </script>
 
 <!-- ══════════════════════════════════
