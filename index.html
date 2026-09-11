@@ -1414,7 +1414,8 @@ Messias, estamos te esperando vem" onpaste="handleChordsPaste(event)"></textarea
   </div>
 </div>
 
-<!-- Firebase (sincronização em tempo real). Carrega só online; app funciona offline sem isso. -->
+<!-- Firebase (sincronização em tempo real). O sw.js guarda estes arquivos no cache pra
+     não travar a abertura com internet ruim; se trocar a versão aqui, troque lá também. -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 
