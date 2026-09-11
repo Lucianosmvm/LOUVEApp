@@ -416,6 +416,24 @@ html, body {
 .cl-tab { color: var(--text-muted); white-space: pre; }
 .cl-empty { display: block; height: 0.4em; }
 
+/* Modo só letra: pra quem canta. Fonte de texto e mais espaço entre as linhas. */
+body.modo-letra .chord-content { font-family: 'DM Sans', sans-serif; line-height: 1.7; }
+body.modo-letra .cl-lyric { font-size: 1.15em; }
+body.modo-letra .cl-empty { height: 0.9em; }
+.btn-letra.ativo, #tom-culto-btn.tom-fixo { background: var(--accent-light); border-color: var(--accent); }
+
+/* Anotações do culto */
+.song-notas {
+  margin-top: 0.75rem; padding: 0.5rem 0.75rem;
+  background: var(--accent-light); border-left: 3px solid var(--accent); border-radius: 6px;
+  font-family: 'DM Sans', sans-serif; font-size: 0.86rem; line-height: 1.45; color: var(--text);
+  white-space: pre-wrap; word-break: break-word; cursor: pointer;
+}
+.song-notas.vazia { background: none; border-left-color: transparent; padding: 0.15rem 0; color: var(--text-muted); font-size: 0.76rem; }
+#perf-notas, #sync-notas { margin: 0 0 1.1rem; cursor: default; font-size: 0.95rem; }
+.nota-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+.nota-chips .btn { font-size: 0.74rem; padding: 0.3rem 0.55rem; }
+
 /* ══════════════════════════════════
    EMPTY STATE
 ══════════════════════════════════ */
@@ -680,7 +698,6 @@ html, body {
 .eq-choice-btn small { display: block; font-size: 0.72rem; opacity: 0.75; font-weight: 400; }
 
 /* Tom do culto */
-#tom-culto-btn.tom-fixo { background: var(--accent-light); border-color: var(--accent); }
 .tom-culto-tag { color: var(--accent-deep); font-size: 0.78em; }
 
 /* Lixeira */
@@ -722,7 +739,7 @@ html, body {
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
-#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay, #warn-modal-overlay, #equipe-modal-overlay, #lixeira-modal-overlay {
+#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay, #warn-modal-overlay, #equipe-modal-overlay, #lixeira-modal-overlay, #notas-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
@@ -735,7 +752,7 @@ html, body {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open, #warn-modal-overlay.open, #equipe-modal-overlay.open, #lixeira-modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open, #warn-modal-overlay.open, #equipe-modal-overlay.open, #lixeira-modal-overlay.open, #notas-modal-overlay.open { opacity: 1; pointer-events: all; }
 
 .modal {
   background: var(--surface);
@@ -758,6 +775,7 @@ html, body {
 #warn-modal-overlay.open .modal,
 #equipe-modal-overlay.open .modal,
 #lixeira-modal-overlay.open .modal,
+#notas-modal-overlay.open .modal,
 #cc-modal-overlay.open .modal { transform: translateY(0); }
 
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
@@ -987,6 +1005,7 @@ html, body {
           <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
         </div>
         <div class="tb-group tb-actions" style="margin-left:auto; gap:0.4rem">
+          <button class="btn btn-letra" onclick="toggleModoLetra()" title="🎤 Só letra: esconde os acordes, pra quem canta">🎤</button>
           <button class="btn" id="tom-culto-btn" onclick="fixarTomCulto()" title="📌 Tom do culto: fixa o tom da tela pra equipe toda (toque de novo pra tirar)">📌</button>
           <button class="btn" onclick="resetAll()" title="Resetar meu tom e capo">↺</button>
           <button class="btn btn-play" id="scroll-btn" onclick="enterPerformanceMode()">▶ Play</button>
@@ -1010,6 +1029,7 @@ html, body {
               <span id="display-capo-span" style="display:none">Capo: <strong id="display-capo"></strong>ª casa</span>
               <span id="display-bpm-span" style="display:none">BPM: <strong id="display-bpm"></strong></span>
             </div>
+            <div id="display-notas" class="song-notas vazia" onclick="abrirNotas()"></div>
           </div>
           <div class="chord-content" id="chord-content"></div>
         </div>
@@ -1046,11 +1066,13 @@ html, body {
         <span class="tb-val small" id="perf-speed-display">1</span>
         <button class="btn" onclick="changeScrollSpeed(+1)">+</button>
       </div>
+      <button class="btn btn-letra" onclick="toggleModoLetra()" title="Só letra">🎤 Letra</button>
       <button class="btn" onclick="exitPerformanceMode()" style="border-color:var(--red);color:var(--red);font-weight:700">✕ Sair</button>
     </div>
   </div>
 
   <div id="perf-sheet-wrap">
+    <div id="perf-notas" class="song-notas" style="display:none"></div>
     <div class="chord-content" id="perf-chord-content"></div>
   </div>
 
@@ -1069,10 +1091,11 @@ html, body {
     </div>
     <div class="sync-controls">
       <span class="sync-live">🔴 AO VIVO</span>
+      <button class="btn btn-letra" onclick="toggleModoLetra()" title="Só letra">🎤</button>
       <button class="btn" onclick="leaveSync()" style="border-color:var(--red);color:var(--red);font-weight:700">✕ Sair</button>
     </div>
   </div>
-  <div id="sync-sheet-wrap"><div class="chord-content" id="sync-chord-content"></div></div>
+  <div id="sync-sheet-wrap"><div id="sync-notas" class="song-notas" style="display:none"></div><div class="chord-content" id="sync-chord-content"></div></div>
   <div id="sync-waiting">Aguardando o host abrir uma cifra…</div>
 </div>
 
@@ -1121,6 +1144,30 @@ html, body {
       <button class="modal-close" onclick="closeEquipeModal()">✕</button>
     </div>
     <div class="modal-body" id="equipe-modal-body"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL (anotações da música)
+══════════════════════════════════ -->
+<div id="notas-modal-overlay">
+  <div class="modal" style="max-height:85dvh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3 id="notas-titulo">📝 Anotações</h3>
+      <button class="modal-close" onclick="fecharNotas()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label id="notas-label">Aparece no topo da cifra</label>
+        <textarea id="inp-notas" rows="4" maxlength="500" placeholder="ex: entra só teclado · refrão 2x · ministração no final"></textarea>
+        <div class="nota-chips" id="nota-chips"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn" onclick="fecharNotas()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarNotas()" style="padding:0.5rem 1.25rem">Salvar</button>
+    </div>
   </div>
 </div>
 
@@ -1632,7 +1679,42 @@ function isChordLine(line) {
 // ══════════════════════════════════
 // RENDER CHORD CONTENT
 // ══════════════════════════════════
+// Modo só letra: preferência de cada aparelho (o vocal liga, o violão não).
+let modoLetra = false;
+try { modoLetra = localStorage.getItem('louva_modo_letra') === '1'; } catch (e) {}
+document.body.classList.toggle('modo-letra', modoLetra);
+
+// Só a letra: tira acorde e tablatura, e os espaços que a cifra põe no meio da
+// letra pra alinhar sílaba com acorde. Seção fica ("[Refrão]"), sem os acordes
+// que às vezes vêm na mesma linha ("[Intro] G D Em"), pra quem canta saber onde está.
+function buildLetraHTML(source) {
+  const out = [];
+  let vazia = true; // evita linha em branco no começo e várias seguidas
+  source.split('\n').forEach(raw => {
+    if (isTabLine(raw) || isChordLine(raw)) return;
+    const t = raw.trim();
+    if (!t) { if (!vazia) out.push('<span class="cl cl-empty"></span>'); vazia = true; return; }
+    const secao = t.match(/^\[[^\]]*\]/);
+    if (secao) { out.push(`<span class="cl cl-section">${esc(secao[0])}</span>`); vazia = true; return; }
+    out.push(`<span class="cl cl-lyric">${esc(t.replace(/\s{2,}/g, ' '))}</span>`);
+    vazia = false;
+  });
+  return out.join('');
+}
+
+function toggleModoLetra() {
+  modoLetra = !modoLetra;
+  try { localStorage.setItem('louva_modo_letra', modoLetra ? '1' : '0'); } catch (e) {}
+  document.body.classList.toggle('modo-letra', modoLetra);
+  document.querySelectorAll('.btn-letra').forEach(b => b.classList.toggle('ativo', modoLetra));
+  renderSheet();
+  if (document.getElementById('perf-overlay').classList.contains('active')) syncPerf();
+  if (typeof syncRole !== 'undefined' && syncRole === 'follower') { renderFollow(); applyFollowScroll(lastFollowFrac); }
+  driveToast(modoLetra ? '🎤 Só letra: acordes escondidos neste celular' : '🎸 Cifra completa', 'ok');
+}
+
 function buildChordHTML(source, semiArg) {
+  if (modoLetra) return buildLetraHTML(source);
   const lines = source.split('\n');
   const semi = (semiArg != null) ? semiArg : getTotalSemitones();
   const out = [];
@@ -1713,6 +1795,73 @@ function fixarTomCulto() {
   syncOnChange();
 }
 
+// ── Anotações do culto ──
+// song.notas: recado curto da música pra equipe ("entra só teclado · refrão
+// 2x"). É conteúdo da música, então sincroniza com a equipe e vai no Ao Vivo.
+const NOTAS_ATALHOS = ['Só teclado no início', 'Refrão 2x', 'Ministração no final', 'Emenda na próxima', 'Final: repete a última frase', 'Tom sobe no final', 'Só voz e violão'];
+let notasSongId = null; // pelo id, não pela posição: a lista pode mudar enquanto edita
+
+function mostraNotas(elId, texto) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  el.style.display = texto ? '' : 'none';
+  el.textContent = texto ? '📝 ' + texto : '';
+}
+
+function abrirNotas() {
+  const song = activeIdx !== -1 ? getSongs()[activeIdx] : null;
+  if (!song) return;
+  garanteIds();
+  notasSongId = song.id;
+  const naEquipe = (typeof eqCodigo !== 'undefined' && eqCodigo);
+  document.getElementById('notas-titulo').textContent = '📝 ' + song.title;
+  document.getElementById('notas-label').textContent = naEquipe
+    ? 'Aparece no topo da cifra pra toda a equipe'
+    : 'Aparece no topo da cifra';
+  const inp = document.getElementById('inp-notas');
+  inp.value = song.notas || '';
+  const chips = document.getElementById('nota-chips');
+  chips.innerHTML = '';
+  NOTAS_ATALHOS.forEach(t => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'btn';
+    b.textContent = '+ ' + t;
+    b.addEventListener('click', () => {
+      const atual = inp.value.trim();
+      inp.value = (atual ? atual + ' · ' : '') + t;
+      inp.focus();
+    });
+    chips.appendChild(b);
+  });
+  document.getElementById('notas-modal-overlay').classList.add('open');
+  setTimeout(() => inp.focus(), 150);
+}
+
+function fecharNotas() {
+  document.getElementById('notas-modal-overlay').classList.remove('open');
+  notasSongId = null;
+}
+
+function salvarNotas() {
+  let song = null;
+  groups.some(g => (song = (g.songs || []).find(s => s.id === notasSongId)));
+  if (!song) { fecharNotas(); driveToast('Essa música não existe mais (outro celular apagou?).', 'err'); return; }
+  const texto = document.getElementById('inp-notas').value.trim().slice(0, 500);
+  if (texto) song.notas = texto; else delete song.notas;
+  fecharNotas();
+  save();
+  renderSongList();
+  renderSheet();
+  if (document.getElementById('perf-overlay').classList.contains('active')) syncPerf();
+  syncOnChange();
+  driveToast(texto ? '📝 Anotação salva' : 'Anotação apagada', 'ok');
+}
+
+document.getElementById('notas-modal-overlay').addEventListener('click', function (e) {
+  if (e.target === this) fecharNotas();
+});
+
 // ══════════════════════════════════
 // RENDER GROUPS BAR
 // ══════════════════════════════════
@@ -1749,6 +1898,7 @@ function renderSheet() {
   document.getElementById('capo-display').textContent = capo;
   const tcSong = activeIdx !== -1 ? songs[activeIdx] : null;
   document.getElementById('tom-culto-btn').classList.toggle('tom-fixo', !!(tcSong && tcSong.tomCulto));
+  document.querySelectorAll('.btn-letra').forEach(b => b.classList.toggle('ativo', modoLetra));
   document.getElementById('font-size-display').textContent = fontSize;
 
   if (activeIdx === -1 || !songs[activeIdx]) {
@@ -1786,6 +1936,9 @@ function renderSheet() {
     document.getElementById('display-bpm-span').style.display = 'none';
   }
   setMetroSongBpm(song.bpm);
+  const notasEl = document.getElementById('display-notas');
+  notasEl.classList.toggle('vazia', !song.notas);
+  notasEl.textContent = song.notas ? '📝 ' + song.notas : '+ anotação pro culto';
   const cc = document.getElementById('chord-content');
   cc.innerHTML = buildChordHTML(song.chords || '');
   cc.style.fontSize = fontSize + 'px';
@@ -1818,7 +1971,7 @@ function renderSongList() {
         <span class="song-num">${i+1}</span>
         <div class="song-info">
           <div class="song-title">${esc(song.title)}</div>
-          <div class="song-artist">${esc(song.artist||'')}</div>
+          <div class="song-artist">${esc(song.artist||'')}${song.notas ? `${song.artist ? ' · ' : ''}📝 ${esc(song.notas.split('\n')[0])}` : ''}</div>
         </div>
         <span class="song-key-badge">${esc(songDisplayKey(song))}${songDisplayCapo(song) > 0 ? ` · C${songDisplayCapo(song)}` : ''}</span>
         <button class="song-edit" title="Editar">✏</button>
@@ -2046,6 +2199,7 @@ function syncPerf() {
   const speedLabel = scrollSpeed % 1 === 0 ? scrollSpeed : scrollSpeed.toFixed(1);
   const ps = document.getElementById('perf-speed-display');
   if (ps) ps.textContent = speedLabel;
+  mostraNotas('perf-notas', song.notas);
   const pc = document.getElementById('perf-chord-content');
   pc.innerHTML = buildChordHTML(song.chords || '');
   pc.style.fontSize = fontSize + 'px';
@@ -2102,7 +2256,9 @@ document.getElementById('perf-sheet-wrap').addEventListener('click', () => {
 // MOBILE TABS
 // ══════════════════════════════════
 function switchTab(tab) {
-  document.body.className = 'tab-' + tab;
+  // Troca só a classe da aba: o body também carrega modo-letra.
+  document.body.classList.remove('tab-setlist', 'tab-cifra');
+  document.body.classList.add('tab-' + tab);
   document.getElementById('tab-setlist-btn').classList.toggle('active', tab === 'setlist');
   document.getElementById('tab-cifra-btn').classList.toggle('active', tab === 'cifra');
   updateMetroVisibility();
@@ -2185,8 +2341,8 @@ function saveSong() {
   if (editingIdx >= 0) {
     // Mantém o id: pra equipe, editar é mudar a mesma música, não apagar e criar outra.
     if (songs[editingIdx] && songs[editingIdx].id) song.id = songs[editingIdx].id;
-    // O formulário não tem o tom do culto; sem isto, editar a letra apagaria o tom fixado.
-    if (songs[editingIdx] && songs[editingIdx].tomCulto) song.tomCulto = songs[editingIdx].tomCulto;
+    // O formulário não tem tom do culto nem anotações; sem isto, editar a letra apagaria os dois.
+    ['tomCulto', 'notas'].forEach(k => { if (songs[editingIdx] && songs[editingIdx][k]) song[k] = songs[editingIdx][k]; });
     songs[editingIdx] = song;
     // Reset transposição da sessão se editou a música ativa (tom original mudou)
     if (editingIdx === activeIdx) { transposeOffset = 0; capoOverride = -1; }
@@ -2858,7 +3014,7 @@ function syncPushState() {
   if (activeIdx < 0 || !songs[activeIdx]) return;
   const s = songs[activeIdx];
   fbDb.ref('rooms/' + syncRoom + '/v').set({
-    song: { title: s.title, artist: s.artist || '', key: s.key, capo: parseInt(s.capo) || 0, chords: s.chords || '' },
+    song: { title: s.title, artist: s.artist || '', key: s.key, capo: parseInt(s.capo) || 0, chords: s.chords || '', notas: s.notas || '' },
     keyOffset: tomCultoSemis(s) + transposeOffset,
     capoOverride: capoOverride,
     fontSize: fontSize,
@@ -2915,6 +3071,7 @@ function renderFollow() {
   const eff = (typeof v.capoOverride === 'number' && v.capoOverride >= 0) ? v.capoOverride : (parseInt(song.capo) || 0);
   document.getElementById('sync-title').textContent = song.title + (song.artist ? ' — ' + song.artist : '');
   document.getElementById('sync-info').textContent = 'Tom: ' + curKey + (eff > 0 ? '  ·  Capo: ' + eff + 'ª casa' : '');
+  mostraNotas('sync-notas', song.notas);
   const cc = document.getElementById('sync-chord-content');
   cc.innerHTML = buildChordHTML(song.chords || '', semi);
   cc.style.fontSize = ((parseInt(v.fontSize) || 14)) + 'px';
