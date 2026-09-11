@@ -666,6 +666,19 @@ html, body {
 .sync-divider::before, .sync-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 #sync-btn.live { background: rgba(192,82,74,0.85); border-color: rgba(255,255,255,0.5); }
 
+/* Equipe: bolinha verde = conectado ao vivo, âmbar = na equipe mas sem internet */
+#equipe-btn { position: relative; }
+#equipe-btn.eq-on::after, #equipe-btn.eq-off::after {
+  content: ''; position: absolute; top: 3px; right: 3px;
+  width: 7px; height: 7px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.8);
+}
+#equipe-btn.eq-on::after { background: #4caf50; }
+#equipe-btn.eq-off::after { background: #e8a840; }
+.eq-code-box { font-size: 1.6rem; letter-spacing: 0.12em; user-select: all; }
+.eq-choice-btn { text-align: left; line-height: 1.35; white-space: normal; }
+.eq-choice-btn small { display: block; font-size: 0.72rem; opacity: 0.75; font-weight: 400; }
+
 /* ══════════════════════════════════
    MOBILE TABS
 ══════════════════════════════════ */
@@ -697,7 +710,7 @@ html, body {
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
-#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay, #warn-modal-overlay {
+#modal-overlay, #group-modal-overlay, #copy-modal-overlay, #sync-modal-overlay, #pin-modal-overlay, #cc-modal-overlay, #warn-modal-overlay, #equipe-modal-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
@@ -710,7 +723,7 @@ html, body {
   pointer-events: none;
   transition: opacity 0.2s;
 }
-#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open, #warn-modal-overlay.open { opacity: 1; pointer-events: all; }
+#modal-overlay.open, #group-modal-overlay.open, #copy-modal-overlay.open, #sync-modal-overlay.open, #pin-modal-overlay.open, #cc-modal-overlay.open, #warn-modal-overlay.open, #equipe-modal-overlay.open { opacity: 1; pointer-events: all; }
 
 .modal {
   background: var(--surface);
@@ -731,6 +744,7 @@ html, body {
 #sync-modal-overlay.open .modal,
 #pin-modal-overlay.open .modal,
 #warn-modal-overlay.open .modal,
+#equipe-modal-overlay.open .modal,
 #cc-modal-overlay.open .modal { transform: translateY(0); }
 
 .modal-handle { width: 36px; height: 4px; background: var(--border); border-radius: 2px; margin: 0.75rem auto 0; opacity: 0.5; }
@@ -870,6 +884,9 @@ html, body {
       </button>
       <button class="btn btn-drive-put" onclick="gdriveBackup()" title="SALVAR no Drive: substitui o backup do Drive pelas músicas deste aparelho (pede senha)">
         <span class="btn-icon-sym">☁↑</span> Salvar
+      </button>
+      <button class="btn" id="equipe-btn" onclick="openEquipeModal()" title="Biblioteca da equipe: as mesmas músicas em todos os celulares">
+        <span class="btn-icon-sym">👥</span> <span id="equipe-btn-label">Equipe</span>
       </button>
       <button class="btn" id="sync-btn" onclick="openSyncModal()" title="Espelhar cifra ao vivo em outro celular">
         <span class="btn-icon-sym">⇆</span> <span id="sync-btn-label">Ao Vivo</span>
@@ -1073,6 +1090,20 @@ html, body {
       <button class="modal-close" onclick="closeSyncModal()">✕</button>
     </div>
     <div class="modal-body" id="sync-modal-body"></div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════
+     MODAL (biblioteca da equipe)
+══════════════════════════════════ -->
+<div id="equipe-modal-overlay">
+  <div class="modal" style="max-height:80dvh">
+    <div class="modal-handle"></div>
+    <div class="modal-header">
+      <h3>👥 Equipe</h3>
+      <button class="modal-close" onclick="closeEquipeModal()">✕</button>
+    </div>
+    <div class="modal-body" id="equipe-modal-body"></div>
   </div>
 </div>
 
@@ -2060,6 +2091,8 @@ function saveSong() {
   };
   const songs = getSongs();
   if (editingIdx >= 0) {
+    // Mantém o id: pra equipe, editar é mudar a mesma música, não apagar e criar outra.
+    if (songs[editingIdx] && songs[editingIdx].id) song.id = songs[editingIdx].id;
     songs[editingIdx] = song;
     // Reset transposição da sessão se editou a música ativa (tom original mudou)
     if (editingIdx === activeIdx) { transposeOffset = 0; capoOverride = -1; }
@@ -2294,8 +2327,24 @@ function handleChordsPaste(e) {
 // ══════════════════════════════════
 // STORAGE
 // ══════════════════════════════════
-function save() {
+// Toda música e todo grupo precisa de id fixo: é por ele que a biblioteca da
+// equipe sabe qual música mudou, sem depender da posição na lista.
+function garanteIds() {
+  groups.forEach(g => {
+    if (!g.id) g.id = uid();
+    (g.songs || []).forEach(s => { if (!s.id) s.id = uid(); });
+  });
+}
+
+function saveLocal() {
   try { localStorage.setItem('worship-pl-v2', JSON.stringify({ groups, activeGroupId })); } catch(e) {}
+}
+
+function save() {
+  garanteIds();
+  saveLocal();
+  // Definida no bloco da equipe, mais abaixo. Sobe a mudança pro Firebase.
+  if (typeof equipeAoSalvar === 'function') equipeAoSalvar();
 }
 
 function load() {
@@ -2338,7 +2387,9 @@ function handleImport(e) {
       const d = JSON.parse(ev.target.result);
       // New format
       if (d.groups && Array.isArray(d.groups)) {
-        if (confirm(`Importar ${d.groups.length} grupo(s)?`)) {
+        const naEquipe = (typeof eqCodigo !== 'undefined' && eqCodigo)
+          ? `\n\nAtenção: você está na equipe ${eqCodigo}. Isto troca a lista de TODOS os celulares da equipe.` : '';
+        if (confirm(`Importar ${d.groups.length} grupo(s)? A lista atual será substituída.${naEquipe}`)) {
           groups = d.groups; activeGroupId = groups[0]?.id || null;
           activeIdx = -1; save(); renderGroupsBar(); renderSongList(); renderSheet();
         }
@@ -2633,7 +2684,11 @@ function updateMetroVisibility() {
 buildKeyGrids();
 updateMetroBpm();
 load();
-if (!groups.length) {
+// Numa equipe, lista vazia é lista vazia de verdade: as músicas de exemplo não
+// podem aparecer, senão subiriam pra biblioteca de todo mundo no próximo save.
+let _naEquipe = false;
+try { _naEquipe = !!localStorage.getItem('louva_equipe'); } catch (e) {}
+if (!groups.length && !_naEquipe) {
   groups = DEMO_GROUPS;
   activeGroupId = groups[0].id;
 }
@@ -2889,6 +2944,524 @@ if (typeof firebase === 'undefined') {
   if (b) b.style.display = 'none';
 }
 updateSyncUI();
+</script>
+
+<!-- ══════════════════════════════════
+     BIBLIOTECA DA EQUIPE (Firebase Realtime Database)
+══════════════════════════════════ -->
+<script>
+// O que é: as músicas e os grupos ficam em equipes/<CÓDIGO>/grupos, no mesmo
+// projeto Firebase do "Ao Vivo". Todo celular que entrou com o código escuta
+// esse caminho e recebe as mudanças dos outros em segundos. A cópia local
+// (localStorage) continua existindo, então o app abre e toca sem internet.
+//
+// Formato no Firebase. Objeto do Firebase não guarda ordem, por isso o campo ordem:
+//   equipes/K7P2-M9QX/criada = timestamp
+//   equipes/K7P2-M9QX/grupos/<idGrupo> = { name, color, ordem,
+//       songs: { <idMusica>: { title, artist, key, capo, bpm, chords, ordem } } }
+//
+// Por que não sobe a lista inteira a cada save: com a equipe editando junta,
+// "o último a salvar vence" apagaria em silêncio a música que outro acabou de
+// adicionar. Então cada aparelho guarda a BASE: o hash de cada música como ela
+// estava na última vez que ele e o servidor concordaram. Na hora de
+// sincronizar, compara os três lados:
+//   local != base                  => mudou aqui, sobe só essa música
+//   local == base                  => não mexi aqui, vale o que está no servidor
+//   está na base, sumiu daqui      => apaguei aqui, apaga lá
+//   está na base, sumiu do servidor => outro apagou, apaga aqui
+// Duas pessoas editando músicas diferentes ao mesmo tempo: as duas mudanças
+// ficam. Editando a MESMA música: fica a última.
+//
+// A base só é gravada no aparelho depois que o servidor confirma a escrita. Se
+// o celular editar sem internet e o app fechar antes da conexão voltar, a base
+// antiga continua lá e a mudança sobe na próxima vez que abrir online.
+//
+// Tom transposto (keyOffset) e capo escolhido (capoOverride) são de cada
+// aparelho e nunca sobem: o violão pode usar capo e o teclado não.
+//
+// REGRAS DO FIREBASE (console.firebase.google.com -> Realtime Database ->
+// Regras), ao lado da regra de "rooms" que já existe. O código da equipe é a
+// proteção: sem ele não se lê nem se escreve nada, e a raiz não é listável,
+// então não dá pra descobrir os códigos.
+//   "equipes": {
+//     "$codigo": {
+//       ".read":  "$codigo.matches(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/)",
+//       ".write": "$codigo.matches(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/)"
+//     }
+//   }
+const EQ_KEY = 'louva_equipe';
+const EQ_CODIGO_RE = /^[A-Z2-9]{4}-[A-Z2-9]{4}$/;
+const EQ_CAMPOS_LOCAIS = ['id', 'keyOffset', 'capoOverride', 'ordem'];
+const EQ_TIMEOUT = 12000;
+
+let eqCodigo = null;     // código da equipe deste aparelho, ou null
+let eqBase = null;       // { idGrupo: { name, color, ordem, m: { idMusica: { h, o } } } }
+let eqRemoto = null;     // último estado do servidor (null = ainda não chegou)
+let eqRef = null;
+let eqConnRef = null;
+let eqOnline = false;
+let eqPendentes = 0;     // escritas enviadas e ainda não confirmadas
+let eqTela = null;       // escolha pendente ao entrar numa equipe
+let eqConvite = null;    // código recebido por link enquanto já estava noutra equipe
+
+try {
+  const d = JSON.parse(localStorage.getItem(EQ_KEY) || 'null');
+  if (d && EQ_CODIGO_RE.test(d.codigo)) { eqCodigo = d.codigo; eqBase = d.base || {}; }
+} catch (e) {}
+
+function eqGravaBase() {
+  if (!eqCodigo || eqPendentes > 0) return;
+  try { localStorage.setItem(EQ_KEY, JSON.stringify({ codigo: eqCodigo, base: eqBase || {} })); } catch (e) {}
+}
+
+// JSON com as chaves em ordem alfabética. O Firebase devolve os campos em ordem
+// alfabética e o app cria na ordem do formulário: sem isso a mesma música
+// teria dois hashes e subiria de novo a cada save.
+function eqEstavel(v) {
+  if (Array.isArray(v)) return '[' + v.map(eqEstavel).join(',') + ']';
+  if (v && typeof v === 'object') {
+    return '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + eqEstavel(v[k])).join(',') + '}';
+  }
+  return JSON.stringify(v);
+}
+
+// cyrb53. Não precisa ser criptográfico, só mudar quando o conteúdo muda.
+function eqHash(obj) {
+  const str = eqEstavel(obj);
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
+}
+
+// O que da música é da equipe: só campos simples, sem os que são do aparelho.
+// Array e objeto ficam de fora porque o Firebase os reescreve do jeito dele e o
+// hash nunca bateria.
+function eqConteudo(s) {
+  const c = {};
+  Object.keys(s || {}).forEach(k => {
+    if (EQ_CAMPOS_LOCAIS.indexOf(k) !== -1) return;
+    const v = s[k];
+    if (typeof v === 'string' || typeof v === 'boolean' || (typeof v === 'number' && isFinite(v))) c[k] = v;
+  });
+  return c;
+}
+
+// groups (array do app) -> formato do Firebase
+function eqDeGrupos(gs) {
+  const out = {};
+  gs.forEach((g, gi) => {
+    const songs = {};
+    (g.songs || []).forEach((s, si) => { songs[s.id] = Object.assign(eqConteudo(s), { ordem: si }); });
+    out[g.id] = { name: g.name || '', color: g.color || '', ordem: gi, songs };
+  });
+  return out;
+}
+
+function eqAssinatura(N) {
+  const b = {};
+  Object.keys(N || {}).forEach(gid => {
+    const g = N[gid], m = {};
+    Object.keys(g.songs || {}).forEach(sid => {
+      m[sid] = { h: eqHash(eqConteudo(g.songs[sid])), o: g.songs[sid].ordem };
+    });
+    b[gid] = { name: g.name, color: g.color, ordem: g.ordem, m };
+  });
+  return b;
+}
+
+// Junta servidor (R) e aparelho (L) usando a base (B). Devolve o resultado e o
+// multi-path update que leva o servidor até ele (caminhos relativos a grupos/).
+function eqConcilia(R, L, B) {
+  const res = JSON.parse(JSON.stringify(R || {}));
+  const upd = {};
+  B = B || {};
+  Object.keys(L).forEach(gid => {
+    const lg = L[gid], bg = B[gid];
+    let rg = res[gid];
+    if (bg && !rg) return;                       // outro aparelho apagou o grupo
+    if (!rg) { res[gid] = lg; upd[gid] = lg; return; } // grupo novo daqui
+    if (bg) {
+      ['name', 'color', 'ordem'].forEach(k => {
+        if (lg[k] !== bg[k] && rg[k] !== lg[k]) { rg[k] = lg[k]; upd[gid + '/' + k] = lg[k]; }
+      });
+    }
+    // Grupo fora da base (juntando biblioteca ao entrar): nome e cor do servidor valem.
+    rg.songs = rg.songs || {};
+    const bm = bg ? bg.m : {};
+    Object.keys(lg.songs).forEach(sid => {
+      const ls = lg.songs[sid], rs = rg.songs[sid], b = bm[sid];
+      const caminho = gid + '/songs/' + sid;
+      if (!b) {                                  // fora da base
+        if (!rs) { rg.songs[sid] = ls; upd[caminho] = ls; } // nova daqui
+        return;                                  // já existe lá: vale a de lá
+      }
+      if (!rs) return;                           // outro aparelho apagou
+      const lh = eqHash(eqConteudo(ls));
+      if (lh !== b.h) {                          // editada aqui
+        if (lh !== eqHash(eqConteudo(rs)) || rs.ordem !== ls.ordem) { rg.songs[sid] = ls; upd[caminho] = ls; }
+        return;
+      }
+      if (ls.ordem !== b.o && rs.ordem !== ls.ordem) { rs.ordem = ls.ordem; upd[caminho + '/ordem'] = ls.ordem; }
+    });
+    Object.keys(bm).forEach(sid => {             // apagadas aqui
+      if (!lg.songs[sid] && rg.songs[sid]) { delete rg.songs[sid]; upd[gid + '/songs/' + sid] = null; }
+    });
+  });
+  Object.keys(B).forEach(gid => {                // grupos apagados aqui
+    if (!L[gid] && res[gid]) { delete res[gid]; upd[gid] = null; }
+  });
+  return { res, upd };
+}
+
+// formato do Firebase -> groups (array do app), mantendo tom e capo deste aparelho
+function eqParaGrupos(N, antes) {
+  const locais = {};
+  (antes || []).forEach(g => (g.songs || []).forEach(s => { if (s && s.id) locais[s.id] = s; }));
+  const porOrdem = (a, b) => ((a[1].ordem || 0) - (b[1].ordem || 0)) || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+  const soObjetos = o => Object.entries(o || {}).filter(e => e[1] && typeof e[1] === 'object');
+  return soObjetos(N).sort(porOrdem).map(([gid, g]) => ({
+    id: gid,
+    name: g.name || '',
+    color: g.color || GROUP_COLORS[0],
+    songs: soObjetos(g.songs).sort(porOrdem).map(([sid, s]) => {
+      const song = Object.assign({ id: sid }, eqConteudo(s));
+      const l = locais[sid];
+      if (l && l.keyOffset) song.keyOffset = l.keyOffset;
+      if (l && typeof l.capoOverride === 'number') song.capoOverride = l.capoOverride;
+      return song;
+    })
+  }));
+}
+
+// Troca a lista da tela pelo resultado, sem perder a música aberta: o app
+// aponta a música ativa por posição, e a posição muda quando outro aparelho
+// adiciona ou reordena.
+function eqAplica(res) {
+  const novos = eqParaGrupos(res, groups);
+  if (eqEstavel(novos) === eqEstavel(groups)) return;
+  const antes = getSongs();
+  const ativa = antes[activeIdx] || null;
+  const hashAtiva = ativa ? eqHash(eqConteudo(ativa)) : null;
+  const editando = (editingIdx >= 0 && antes[editingIdx]) ? antes[editingIdx].id : null;
+
+  groups = novos;
+  if (!groups.some(g => g.id === activeGroupId)) {
+    activeGroupId = groups[0] ? groups[0].id : null;
+  }
+  const songs = getSongs();
+  activeIdx = ativa ? songs.findIndex(s => s.id === ativa.id) : -1;
+  if (editingIdx >= 0) editingIdx = editando ? songs.findIndex(s => s.id === editando) : -1;
+  const ativaMudou = !!ativa && (activeIdx === -1 || eqHash(eqConteudo(songs[activeIdx])) !== hashAtiva);
+
+  saveLocal();
+  renderGroupsBar();
+  renderSongList();
+  // Só redesenha a cifra se a aberta mudou: música nova de outro celular não
+  // pode pular a rolagem de quem está tocando.
+  if (ativaMudou) {
+    renderSheet();
+    if (activeIdx !== -1 && document.getElementById('perf-overlay').classList.contains('active')) syncPerf();
+    syncOnChange();
+  }
+}
+
+function eqSincroniza(R) {
+  garanteIds();
+  const { res, upd } = eqConcilia(R, eqDeGrupos(groups), eqBase);
+  eqBase = eqAssinatura(res);
+  eqRemoto = res;
+  // Aplica antes de escrever: o Firebase dispara o 'value' da própria escrita
+  // dentro do update(), e essa volta precisa encontrar a tela já atualizada.
+  eqAplica(res);
+  if (Object.keys(upd).length && eqRef) {
+    eqPendentes++;
+    eqRef.child('grupos').update(upd).then(() => {
+      eqPendentes--;
+      eqGravaBase();
+      eqStatus();
+    }).catch(e => {
+      eqPendentes--;
+      eqStatus();
+      driveToast('A equipe recusou a mudança: ' + ((e && e.message) || e), 'err');
+    });
+  }
+  eqGravaBase();
+  eqStatus();
+}
+
+// Chamado pelo save() do app.
+function equipeAoSalvar() {
+  if (!eqCodigo || !eqRef || eqRemoto === null) return; // sobe quando o servidor responder
+  eqSincroniza(eqRemoto);
+}
+
+function eqConecta() {
+  eqDesconecta();
+  if (!eqCodigo || !syncInit()) { eqStatus(); return false; }
+  eqRef = fbDb.ref('equipes/' + eqCodigo);
+  eqRef.child('grupos').on('value', snap => {
+    eqSincroniza(snap.val() || {});
+  }, err => {
+    driveToast('Sem acesso à equipe ' + eqCodigo + ' (' + ((err && err.message) || err) + '). Confira as regras do Firebase.', 'err');
+  });
+  eqConnRef = fbDb.ref('.info/connected');
+  eqConnRef.on('value', s => { eqOnline = !!s.val(); eqStatus(); });
+  eqStatus();
+  return true;
+}
+
+function eqDesconecta() {
+  if (eqRef) { try { eqRef.child('grupos').off(); } catch (e) {} }
+  if (eqConnRef) { try { eqConnRef.off(); } catch (e) {} }
+  eqRef = null; eqConnRef = null; eqRemoto = null; eqOnline = false;
+}
+
+function eqComPrazo(p) {
+  return Promise.race([p, new Promise((_, rej) =>
+    setTimeout(() => rej(new Error('o servidor não respondeu. Você está online?')), EQ_TIMEOUT))]);
+}
+
+function eqNovoCodigo() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // sem I/O/0/1 ambíguos
+  const r = new Uint32Array(8);
+  crypto.getRandomValues(r);
+  let s = '';
+  for (let i = 0; i < 8; i++) { s += chars[r[i] % chars.length]; if (i === 3) s += '-'; }
+  return s;
+}
+
+// Aceita "k7p2m9qx", "K7P2-M9QX" ou o link inteiro do convite colado.
+function eqNormalizaCodigo(t) {
+  t = String(t || '');
+  const m = t.match(/equipe=([A-Za-z0-9-]+)/);
+  if (m) t = m[1];
+  const s = t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return s.length === 8 ? s.slice(0, 4) + '-' + s.slice(4) : s;
+}
+
+// Lista nunca salva = músicas de exemplo, que não devem subir pra equipe.
+function eqTemMusicasProprias() {
+  try { return !!localStorage.getItem('worship-pl-v2') && driveContaMusicas(groups) > 0; } catch (e) { return false; }
+}
+
+function eqEntraComo(codigo) {
+  eqCodigo = codigo;
+  eqBase = {}; // base vazia: nada daqui é apagado lá, e o que não existe lá sobe
+  eqPendentes = 0;
+  eqTela = null;
+  eqConvite = null;
+  try { localStorage.setItem(EQ_KEY, JSON.stringify({ codigo, base: {} })); } catch (e) {}
+  eqConecta();
+}
+
+function eqRedesenhaTudo() {
+  renderGroupsBar(); renderSongList(); renderSheet();
+}
+
+async function eqCriar() {
+  if (!syncInit()) { driveToast('Sem conexão com o Firebase. Você está online?', 'err'); return; }
+  eqCarregando('Criando a equipe…');
+  try {
+    let codigo = eqNovoCodigo();
+    const existe = await eqComPrazo(fbDb.ref('equipes/' + codigo + '/criada').once('value'));
+    if (existe.exists()) codigo = eqNovoCodigo();
+    await eqComPrazo(fbDb.ref('equipes/' + codigo + '/criada').set(firebase.database.ServerValue.TIMESTAMP));
+    if (!eqTemMusicasProprias()) { groups = []; activeGroupId = null; activeIdx = -1; saveLocal(); eqRedesenhaTudo(); }
+    eqEntraComo(codigo);
+    driveToast('Equipe criada ✓ Agora mande o convite.', 'ok');
+  } catch (e) {
+    driveToast('Não consegui criar a equipe: ' + ((e && e.message) || e), 'err');
+  }
+  renderEquipeModalBody();
+}
+
+async function eqEntrar(texto) {
+  const codigo = eqNormalizaCodigo(texto);
+  if (!EQ_CODIGO_RE.test(codigo)) { driveToast('Código inválido. O formato é assim: K7P2-M9QX', 'err'); return; }
+  if (!syncInit()) { driveToast('Sem conexão com o Firebase. Você está online?', 'err'); return; }
+  eqCarregando('Procurando a equipe ' + codigo + '…');
+  let d;
+  try {
+    d = (await eqComPrazo(fbDb.ref('equipes/' + codigo).once('value'))).val();
+  } catch (e) {
+    driveToast('Não consegui acessar a equipe: ' + ((e && e.message) || e), 'err');
+    renderEquipeModalBody();
+    return;
+  }
+  if (!d || !d.criada) {
+    driveToast('Equipe ' + codigo + ' não encontrada. Confira o código.', 'err');
+    renderEquipeModalBody();
+    return;
+  }
+  const nRemoto = Object.values(d.grupos || {}).reduce((n, g) => n + Object.keys((g && g.songs) || {}).length, 0);
+  const nLocal = eqTemMusicasProprias() ? driveContaMusicas(groups) : 0;
+  if (nLocal === 0) { eqUsarDaEquipe(codigo); return; }
+  eqTela = { codigo, nRemoto, nLocal };
+  renderEquipeModalBody();
+}
+
+function eqUsarDaEquipe(codigo) {
+  groups = []; activeGroupId = null; activeIdx = -1;
+  saveLocal();
+  eqRedesenhaTudo();
+  eqEntraComo(codigo);
+  renderEquipeModalBody();
+  driveToast('Você entrou na equipe ' + codigo + ' ✓', 'ok');
+}
+
+function eqJuntar(codigo) {
+  eqEntraComo(codigo);
+  renderEquipeModalBody();
+  driveToast('Você entrou na equipe ' + codigo + ' ✓ Suas músicas estão subindo.', 'ok');
+}
+
+async function eqSair() {
+  const aviso = eqPendentes > 0
+    ? '\n\nAtenção: tem mudança deste aparelho que ainda não chegou no servidor. Se sair agora, ela não vai pra equipe.'
+    : '';
+  const ok = await askWarn('Sair da equipe',
+    'Este aparelho para de receber e enviar mudanças da equipe ' + eqCodigo + '.' +
+    '\n\nAs músicas continuam aqui como estão agora. Pra voltar, é só entrar de novo com o código.' + aviso,
+    'Sair da equipe');
+  if (!ok) return false;
+  eqDesconecta();
+  eqCodigo = null; eqBase = null; eqPendentes = 0;
+  try { localStorage.removeItem(EQ_KEY); } catch (e) {}
+  eqStatus();
+  renderEquipeModalBody();
+  return true;
+}
+
+async function eqTrocarPara(codigo) {
+  if (await eqSair()) eqEntrar(codigo);
+}
+
+async function eqMandarConvite() {
+  const url = location.origin + location.pathname + '?equipe=' + eqCodigo;
+  const texto = 'Entra na equipe do Louva+ pra ter as mesmas músicas no celular: ' + url + '  (código ' + eqCodigo + ')';
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Louva+ equipe', text: texto }); return; }
+    catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  try {
+    await navigator.clipboard.writeText(texto);
+    driveToast('Convite copiado ✓ Cole no grupo da equipe.', 'ok');
+  } catch (e) {
+    prompt('Copie o convite:', texto);
+  }
+}
+
+// ── UI ──
+function eqStatus() {
+  const btn = document.getElementById('equipe-btn');
+  if (btn) {
+    btn.classList.toggle('eq-on', !!eqCodigo && eqOnline);
+    btn.classList.toggle('eq-off', !!eqCodigo && !eqOnline);
+    btn.title = !eqCodigo
+      ? 'Biblioteca da equipe: as mesmas músicas em todos os celulares'
+      : 'Equipe ' + eqCodigo + (eqOnline ? ' — conectado' : ' — sem conexão');
+  }
+  const ov = document.getElementById('equipe-modal-overlay');
+  if (ov && ov.classList.contains('open') && eqCodigo && !eqTela) renderEquipeModalBody();
+}
+
+function eqCarregando(msg) {
+  const body = document.getElementById('equipe-modal-body');
+  if (body) body.innerHTML = '<p class="sync-status-line" style="padding:1.2rem 0">' + esc(msg) + '</p>';
+}
+
+function openEquipeModal() {
+  renderEquipeModalBody();
+  document.getElementById('equipe-modal-overlay').classList.add('open');
+}
+
+function closeEquipeModal() {
+  document.getElementById('equipe-modal-overlay').classList.remove('open');
+  eqTela = null;
+}
+
+function renderEquipeModalBody() {
+  const body = document.getElementById('equipe-modal-body');
+  if (!body) return;
+
+  if (eqCodigo) {
+    let estado;
+    if (!syncConfigured()) estado = '🟠 Sem internet quando o app abriu. Dá pra tocar e editar; o que mudar sobe da próxima vez que abrir online.';
+    else if (eqOnline) estado = '🟢 Conectado. O que qualquer um mudar aparece em todos na hora.';
+    else estado = '🟠 Sem conexão. Dá pra tocar e editar; as mudanças sobem quando a internet voltar.';
+    if (eqPendentes > 0) estado += '<br>Enviando mudanças…';
+    body.innerHTML =
+      '<p class="sync-status-line">' + estado + '</p>' +
+      '<div class="sync-code-box eq-code-box">' + eqCodigo + '</div>' +
+      '<p class="sync-status-line">Todo celular com este código vê e edita as mesmas músicas. Quem tem o código também pode apagar: mande só pra equipe.</p>' +
+      '<button class="btn btn-primary sync-action-btn" onclick="eqMandarConvite()">📨 Mandar convite</button>' +
+      (eqConvite && eqConvite !== eqCodigo
+        ? '<button class="btn sync-action-btn" onclick="eqTrocarPara(eqConvite)">Trocar pra equipe ' + eqConvite + ' (do convite)</button>'
+        : '') +
+      '<button class="btn sync-action-btn" onclick="eqSair()" style="border-color:var(--red);color:var(--red);margin-top:0.6rem">Sair da equipe</button>';
+    return;
+  }
+
+  if (eqTela) {
+    const t = eqTela;
+    body.innerHTML =
+      '<p class="sync-status-line">Equipe <strong>' + t.codigo + '</strong> encontrada.</p>' +
+      '<p class="sync-status-line">Na equipe: <strong>' + t.nRemoto + '</strong> música(s)<br>Neste aparelho: <strong>' + t.nLocal + '</strong> música(s)</p>' +
+      '<button class="btn btn-primary sync-action-btn eq-choice-btn" onclick="eqUsarDaEquipe(eqTela.codigo)">Usar só as da equipe' +
+        '<small>As músicas deste aparelho saem daqui.</small></button>' +
+      '<button class="btn sync-action-btn eq-choice-btn" onclick="eqJuntar(eqTela.codigo)">Juntar as minhas com as da equipe' +
+        '<small>As ' + t.nLocal + ' música(s) daqui aparecem pra todo mundo.</small></button>' +
+      '<button class="btn sync-action-btn" onclick="exportPlaylist()">⬇ Exportar backup antes</button>' +
+      '<button class="btn sync-action-btn" onclick="eqTela=null;renderEquipeModalBody()">Cancelar</button>';
+    return;
+  }
+
+  if (!syncConfigured()) {
+    body.innerHTML = '<p class="sync-status-line">Precisa de internet pra criar ou entrar numa equipe.<br>As músicas deste aparelho continuam funcionando normal.</p>';
+    return;
+  }
+  body.innerHTML =
+    '<button class="btn btn-primary sync-action-btn" onclick="eqCriar()">Criar equipe com as músicas deste aparelho</button>' +
+    '<p class="sync-status-line">Gera um código. Quem entrar com ele passa a ter as mesmas músicas e grupos, atualizando sozinho.</p>' +
+    '<div class="sync-divider">ou</div>' +
+    '<div class="form-group">' +
+      '<label>Entrar numa equipe</label>' +
+      '<input type="text" id="eq-join-code" placeholder="ex: K7P2-M9QX" maxlength="200" autocapitalize="characters" autocomplete="off" spellcheck="false" style="text-transform:uppercase;font-family:JetBrains Mono,monospace;font-size:1.1rem;letter-spacing:0.1em;text-align:center">' +
+    '</div>' +
+    '<button class="btn sync-action-btn" onclick="eqEntrar(document.getElementById(\'eq-join-code\').value)">Entrar na equipe</button>';
+}
+
+document.getElementById('equipe-modal-overlay').addEventListener('click', function (e) {
+  if (e.target === this) closeEquipeModal();
+});
+
+// Convite por link: ...?equipe=K7P2-M9QX
+function eqConviteDaUrl() {
+  const p = new URLSearchParams(location.search);
+  const c = p.get('equipe');
+  if (!c) return;
+  p.delete('equipe');
+  const q = p.toString();
+  history.replaceState(null, '', location.pathname + (q ? '?' + q : ''));
+  const codigo = eqNormalizaCodigo(c);
+  if (!EQ_CODIGO_RE.test(codigo)) return;
+  if (codigo === eqCodigo) { driveToast('Você já está na equipe ' + codigo + ' ✓', 'ok'); return; }
+  if (eqCodigo) { eqConvite = codigo; openEquipeModal(); return; }
+  openEquipeModal();
+  const inp = document.getElementById('eq-join-code');
+  if (inp) inp.value = codigo;
+}
+
+if (eqCodigo) eqConecta();
+eqStatus();
+// No load porque usa driveToast, que é definido no bloco do Drive, mais abaixo.
+window.addEventListener('load', eqConviteDaUrl);
 </script>
 
 <!-- ══════════════════════════════════
@@ -3508,6 +4081,19 @@ async function gdriveSync() {
         'Baixar mesmo assim'
       );
       if (!ok) { driveToast('Cancelado. Nada mudou neste aparelho.', 'err'); return; }
+    }
+
+    // Na equipe, a lista deste aparelho É a da equipe: trocar aqui troca de todos.
+    if (eqCodigo) {
+      const ok = await askWarn(
+        'Isto muda a lista da equipe inteira',
+        'Este aparelho está na equipe ' + eqCodigo + '.' +
+        '\n\nBaixar do Drive troca as músicas de TODOS os celulares da equipe pelas do backup (' +
+        driveContaMusicas(d.groups) + ' música(s), de ' + driveQuando(f.modifiedTime) + ').' +
+        '\nO que a equipe adicionou depois desse backup some.',
+        'Trocar a lista da equipe'
+      );
+      if (!ok) { driveToast('Cancelado. Nada mudou.', 'err'); return; }
     }
 
     groups = d.groups;
