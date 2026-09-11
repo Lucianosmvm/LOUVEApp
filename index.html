@@ -697,6 +697,18 @@ body.modo-letra .cl-empty { height: 0.9em; }
 .eq-choice-btn { text-align: left; line-height: 1.35; white-space: normal; }
 .eq-choice-btn small { display: block; font-size: 0.72rem; opacity: 0.75; font-weight: 400; }
 
+/* Aviso "culto ao vivo" pra quem está na equipe */
+#aovivo-banner {
+  display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0;
+  padding: 0.45rem 0.9rem; font-size: 0.85rem;
+  background: rgba(192,82,74,0.12); border-bottom: 1px solid rgba(192,82,74,0.35);
+}
+#aovivo-banner .btn { padding: 0.35rem 0.8rem; font-size: 0.8rem; }
+.aovivo-dot { width: 9px; height: 9px; border-radius: 50%; background: #c0524a; flex-shrink: 0; animation: aovivoPulsa 1.2s ease-in-out infinite; }
+@keyframes aovivoPulsa { 50% { opacity: 0.3; } }
+#aovivo-texto { flex: 1; min-width: 0; font-weight: 600; color: var(--text); }
+.aovivo-fechar { background: none; border: 0; color: var(--text-muted); font-size: 1rem; cursor: pointer; padding: 0.2rem 0.3rem; }
+
 /* Tom do culto */
 .tom-culto-tag { color: var(--accent-deep); font-size: 0.78em; }
 
@@ -931,6 +943,14 @@ body.modo-letra .cl-empty { height: 0.9em; }
       <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
     </div>
   </header>
+
+  <!-- AVISO: LÍDER AO VIVO (equipe) -->
+  <div id="aovivo-banner" style="display:none">
+    <span class="aovivo-dot"></span>
+    <span id="aovivo-texto">Culto ao vivo agora</span>
+    <button class="btn btn-primary" onclick="eqSeguirLider()">Seguir o líder</button>
+    <button class="aovivo-fechar" onclick="eqDispensaAoVivo()" title="Esconder aviso">✕</button>
+  </div>
 
   <!-- GROUPS BAR -->
   <div id="groups-bar"></div>
@@ -3094,6 +3114,13 @@ function joinRoom(code) {
   const vref = fbDb.ref('rooms/' + code + '/v');
   const sref = fbDb.ref('rooms/' + code + '/s');
   vref.on('value', snap => {
+    // A sala só some quando o host toca em "Encerrar sala" (queda de internet
+    // não apaga). Sem isto, quem segue ficaria preso em "Aguardando o host".
+    if (followState && !snap.val() && syncRole === 'follower') {
+      leaveSync();
+      if (typeof driveToast === 'function') driveToast('O líder encerrou o Ao Vivo.', 'ok');
+      return;
+    }
     followState = snap.val();
     openSyncOverlay();
     renderFollow();
@@ -3119,6 +3146,8 @@ function createRoom() {
   syncRoom = randCode();
   syncRole = 'host';
   syncPushState(); // envia o estado atual já de cara
+  // Na equipe, avisa todo mundo que tem sala aberta (quem está na equipe entra sem digitar código).
+  if (typeof eqAnunciaAoVivo === 'function') eqAnunciaAoVivo(syncRoom);
   updateSyncUI();
   renderSyncModalBody(); // mostra o código
 }
@@ -3128,6 +3157,7 @@ function leaveSyncSilent() {
   syncRefs = [];
   if (syncRole === 'host' && syncRoom && fbDb) {
     try { fbDb.ref('rooms/' + syncRoom).remove(); } catch (e) {}
+    if (typeof eqEncerraAoVivo === 'function') eqEncerraAoVivo();
   }
   syncRole = null; syncRoom = null; followState = null; lastFollowFrac = 0;
 }
@@ -3148,6 +3178,7 @@ function updateSyncUI() {
   if (syncRole === 'host') { btn.classList.add('live'); label.textContent = 'Sala ' + syncRoom; }
   else if (syncRole === 'follower') { btn.classList.add('live'); label.textContent = 'Seguindo'; }
   else { btn.classList.remove('live'); label.textContent = 'Sincronizar'; }
+  if (typeof eqAtualizaAoVivoUI === 'function') eqAtualizaAoVivoUI();
 }
 
 function openSyncModal() {
@@ -3175,8 +3206,14 @@ function renderSyncModalBody() {
       '<p class="sync-status-line">Seguindo a sala <strong>' + syncRoom + '</strong>.<br>Sua tela espelha o host em tempo real.</p>' +
       '<button class="btn sync-action-btn" onclick="leaveSync();closeSyncModal()" style="border-color:var(--red);color:var(--red);margin-top:0.6rem">Parar de seguir</button>';
   } else {
+    const lider = (typeof eqAoVivoAtual === 'function') ? eqAoVivoAtual() : null;
     body.innerHTML =
-      '<button class="btn btn-primary sync-action-btn" onclick="createRoom()">Criar sala (eu conduzo)</button>' +
+      (lider
+        ? '<button class="btn btn-primary sync-action-btn" onclick="eqSeguirLider();closeSyncModal()">🔴 Seguir o líder da equipe</button>' +
+          '<p class="sync-status-line">Tem culto ao vivo na sua equipe agora.</p>' +
+          '<div class="sync-divider">ou</div>'
+        : '') +
+      '<button class="btn ' + (lider ? '' : 'btn-primary ') + 'sync-action-btn" onclick="createRoom()">Criar sala (eu conduzo)</button>' +
       '<p class="sync-status-line">Gera um código pra seus amigos seguirem sua tela.</p>' +
       '<div class="sync-divider">ou</div>' +
       '<div class="form-group">' +
@@ -3454,6 +3491,72 @@ function eqSincroniza(R) {
   eqStatus();
 }
 
+// ── Líder ao vivo ──
+// Quem cria sala no "Ao Vivo" estando na equipe publica equipes/<CÓDIGO>/aovivo/<SALA>.
+// Os outros veem o aviso "Seguir o líder" e entram sem digitar o código da sala.
+// Uma entrada por sala: se dois conduzirem ao mesmo tempo, um encerrar não apaga
+// o aviso do outro. onDisconnect tira o aviso se o app do líder fechar ou cair.
+const EQ_SALA_RE = /^[A-Z2-9]{4}$/;
+const EQ_AOVIVO_VALIDADE = 12 * 3600 * 1000; // aviso esquecido não fica pra sempre
+let eqMinhaSala = null;
+let eqAoVivoSalas = {};
+let eqAoVivoDispensada = null;
+
+function eqAnunciaAoVivo(sala) {
+  eqMinhaSala = sala;
+  eqPublicaAoVivo();
+}
+
+function eqPublicaAoVivo() {
+  if (!eqMinhaSala || !eqRef) return;
+  const r = eqRef.child('aovivo/' + eqMinhaSala);
+  try {
+    r.onDisconnect().remove();
+    r.set({ sala: eqMinhaSala, ts: firebase.database.ServerValue.TIMESTAMP }).catch(() => {});
+  } catch (e) {}
+}
+
+function eqEncerraAoVivo() {
+  if (eqMinhaSala && eqRef) {
+    try { const r = eqRef.child('aovivo/' + eqMinhaSala); r.onDisconnect().cancel(); r.remove().catch(() => {}); } catch (e) {}
+  }
+  eqMinhaSala = null;
+}
+
+// Sala mais recente da equipe que não seja a minha, ou null.
+function eqAoVivoAtual() {
+  if (!eqCodigo) return null;
+  const limite = Date.now() - EQ_AOVIVO_VALIDADE;
+  let melhor = null;
+  Object.keys(eqAoVivoSalas || {}).forEach(k => {
+    const a = eqAoVivoSalas[k];
+    if (!a || a.sala !== k || !EQ_SALA_RE.test(k) || k === eqMinhaSala) return;
+    if (typeof a.ts === 'number' && a.ts < limite) return;
+    if (!melhor || (a.ts || 0) > (melhor.ts || 0)) melhor = a;
+  });
+  return melhor;
+}
+
+function eqAtualizaAoVivoUI() {
+  const banner = document.getElementById('aovivo-banner');
+  if (!banner) return;
+  const a = eqAoVivoAtual();
+  const livre = typeof syncRole === 'undefined' || !syncRole; // já segue ou conduz: não avisa
+  banner.style.display = (a && livre && a.sala !== eqAoVivoDispensada) ? '' : 'none';
+}
+
+function eqSeguirLider() {
+  const a = eqAoVivoAtual();
+  if (!a) { driveToast('O líder não está mais ao vivo.', 'err'); eqAtualizaAoVivoUI(); return; }
+  joinRoom(a.sala);
+}
+
+function eqDispensaAoVivo() {
+  const a = eqAoVivoAtual();
+  eqAoVivoDispensada = a ? a.sala : null; // sala nova do líder volta a avisar
+  eqAtualizaAoVivoUI();
+}
+
 // Chamado pelo save() do app.
 function equipeAoSalvar() {
   if (!eqCodigo || !eqRef || eqRemoto === null) return; // sobe quando o servidor responder
@@ -3470,14 +3573,29 @@ function eqConecta() {
     driveToast('Sem acesso à equipe ' + eqCodigo + ' (' + ((err && err.message) || err) + '). Confira as regras do Firebase.', 'err');
   });
   eqConnRef = fbDb.ref('.info/connected');
-  eqConnRef.on('value', s => { eqOnline = !!s.val(); eqStatus(); });
+  eqConnRef.on('value', s => {
+    eqOnline = !!s.val();
+    // Voltou a internet no meio do culto: o onDisconnect já tirou o aviso, publica de novo.
+    if (eqOnline) eqPublicaAoVivo();
+    eqStatus();
+  });
+  eqRef.child('aovivo').on('value', snap => {
+    eqAoVivoSalas = snap.val() || {};
+    eqAtualizaAoVivoUI();
+  });
   if (typeof lixeiraEscutaEquipe === 'function') lixeiraEscutaEquipe();
   eqStatus();
   return true;
 }
 
 function eqDesconecta() {
-  if (eqRef) { try { eqRef.child('grupos').off(); eqRef.child('lixeira').off(); } catch (e) {} }
+  if (eqRef) {
+    try { eqRef.child('grupos').off(); eqRef.child('lixeira').off(); eqRef.child('aovivo').off(); } catch (e) {}
+    // Saindo da equipe com sala aberta: a sala continua, só o aviso sai desta equipe.
+    if (eqMinhaSala) { try { const r = eqRef.child('aovivo/' + eqMinhaSala); r.onDisconnect().cancel(); r.remove(); } catch (e) {} }
+  }
+  eqAoVivoSalas = {};
+  eqAtualizaAoVivoUI();
   if (typeof lixeiraSaiDaEquipe === 'function') lixeiraSaiDaEquipe();
   if (eqConnRef) { try { eqConnRef.off(); } catch (e) {} }
   eqRef = null; eqConnRef = null; eqRemoto = null; eqOnline = false;
